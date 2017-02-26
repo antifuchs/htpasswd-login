@@ -1,7 +1,6 @@
 package htpasswd_test
 
 import (
-	"fmt"
 	"io/ioutil"
 	"net/http"
 	"net/http/cookiejar"
@@ -11,6 +10,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"strings"
 
 	htpasswd "github.com/antifuchs/htpasswd-login"
 )
@@ -158,15 +159,14 @@ func TestBadDomain(t *testing.T) {
 	params := url.Values{}
 	params.Set("login", "test@example.com")
 	params.Set("password", "test")
-	otherURL, _ := url.Parse(ts.URL)
 
 	// Replace "127.0.0.1" from the test server with "localhost" -
 	// it's the same host (usually), but a different name.
 	// NOTE: This assumes that local DNS resolution for
 	// "localhost" works correctly; if yours doesn't, this test
 	// will fail:
-	otherURL.Host = fmt.Sprintf("%s:%s", "localhost", otherURL.Port())
-	resp, err := cl.PostForm(otherURL.String()+"/login/", params)
+	otherURL := strings.Replace(ts.URL, "127.0.0.1", "localhost", 1)
+	resp, err := cl.PostForm(otherURL+"/login/", params)
 	if err != nil {
 		t.Fatal(err)
 	}
