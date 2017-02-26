@@ -2,9 +2,17 @@ This directory includes a htpasswd file and an example login page so
 you can try out how this might work in practice. (Or just use the form
 when you install this in your nginx, that's fine too).
 
-## Credentials
+## Usage
+
+Run the `htpasswd-login-form` program with the flags `-loginform
+./example/page -htpasswd ./example/htpasswd` and navigate to
+http://127.0.0.1:8000/login/.
 
 The test login is `test@example.com` and the password is `test`.
+
+To test the logout flow, navigate to
+http://127.0.0.1:8000/login/logout.html
+
 
 ## Inspiration and design
 
