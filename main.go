@@ -205,9 +205,14 @@ func login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	newCookie.Value = session
-	newCookie.MaxAge = cookieLifetime
 	if r.PostFormValue("ephemeral") == "" {
 		newCookie.Expires = time.Now().Add(time.Duration(cookieLifetime) * time.Second)
+		newCookie.MaxAge = cookieLifetime
+	} else {
+		// Ephemeral session requested - leave off any
+		// MaxAge/Expires settings to attempt to make browsers
+		// drop the cookie once the session ends:
+		newCookie.MaxAge = 0
 	}
 	success = true
 }
