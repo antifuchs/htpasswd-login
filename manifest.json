@@ -1,0 +1,16 @@
+{
+    "dependencies": {
+        "github.com/abbot/go-http-auth": {
+            "branch": "master"
+        },
+        "github.com/dchest/uniuri": {
+            "branch": "master"
+        },
+        "github.com/zenazn/goji": {
+            "branch": "master"
+        },
+        "goji.io": {
+            "branch": "master"
+        }
+    }
+}
