@@ -26,11 +26,11 @@ const usernameHeader string = "X-Authenticated-Username"
 const cookieName string = "_htpasswd_auth"
 const sessionFormat string = time.RFC3339
 const slack time.Duration = time.Duration(10) * time.Second
+const realm string = "example.com"
 
 var sessionDir string
 var domain string
 var htpasswd string
-var realm string
 var cookieLifetime int
 var secure bool
 
@@ -283,7 +283,6 @@ func main() {
 	flag.StringVar(&sessionDir, "sessions", "/var/db/http-auth/cookies", "Directory in which htpasswd-login-form places sessions")
 	flag.StringVar(&domain, "domain", "", "Domain to set on all cookies")
 	flag.StringVar(&htpasswd, "htpasswd", "/etc/nginx/.htpasswd", "htpasswd file to use for authentication")
-	flag.StringVar(&realm, "realm", "example.com", "HTTP Basic auth realm to pretend we run in")
 	flag.IntVar(&cookieLifetime, "lifetime", 86400, "Maximum cookie lifetime in seconds")
 	flag.BoolVar(&secure, "secure", true, "Whether to set cookies to secure (false is useful for dev)")
 
