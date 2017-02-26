@@ -166,7 +166,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		http.SetCookie(w, newCookie)
 		if !success {
-			http.Error(w, "Nope", http.StatusUnauthorized)
+			http.Error(w, "Nope", http.StatusForbidden)
 			return
 		}
 	}()
