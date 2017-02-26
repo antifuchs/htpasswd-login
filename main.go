@@ -22,6 +22,7 @@ import (
 	"goji.io/pat"
 )
 
+const usernameHeader string = "X-Authenticated-Username"
 const cookieName string = "_htpasswd_auth"
 const sessionFormat string = time.RFC3339
 const slack time.Duration = time.Duration(10) * time.Second
@@ -45,6 +46,7 @@ func init() {
 type session struct {
 	CreatedRaw string `json:"created"`
 	Domain     string
+	Username   string
 
 	Name    string    `json:"-"`
 	Created time.Time `json:"-"`
@@ -142,14 +144,19 @@ func checkSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// We have a valid session that hasn't yet expired. Let's call it a success.
+	w.Header().Set(usernameHeader, session.Username)
 	success = true
 	return
 }
 
-func newSession(domain string) (string, error) {
+func newSession(domain, user string) (string, error) {
 	name := uniuri.NewLen(90)
 	sessionPath := filepath.Join(sessionDir, name)
-	data, err := json.Marshal(session{CreatedRaw: time.Now().Add(slack).Format(sessionFormat), Domain: domain})
+	data, err := json.Marshal(session{
+		CreatedRaw: time.Now().Add(slack).Format(sessionFormat),
+		Domain:     domain,
+		Username:   user,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -193,7 +200,7 @@ func login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// OK, we're authenticated. Let's get a session started:
-	session, err := newSession(r.Host)
+	session, err := newSession(r.Host, user)
 	if err != nil {
 		return
 	}
