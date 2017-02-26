@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	htpasswd "github.com/antifuchs/htpasswd-login-form"
+	htpasswd "github.com/antifuchs/htpasswd-login"
 )
 
 type timer struct {

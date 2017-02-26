@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	htpasswd "github.com/antifuchs/htpasswd-login-form"
+	htpasswd "github.com/antifuchs/htpasswd-login"
 	"github.com/zenazn/goji/bind"
 )
 
@@ -17,7 +17,7 @@ func main() {
 	srv := htpasswd.Service{}
 
 	bind.WithFlag()
-	flag.StringVar(&srv.SessionDir, "sessions", "/var/db/http-auth/cookies", "Directory in which htpasswd-login-form places sessions")
+	flag.StringVar(&srv.SessionDir, "sessions", "/var/db/http-auth/cookies", "Directory in which htpasswd-login places sessions")
 	flag.StringVar(&srv.Domain, "domain", "", "Domain to set on all cookies")
 	flag.StringVar(&srv.Htpasswd, "htpasswd", "/etc/nginx/.htpasswd", "htpasswd file to use for authentication")
 	var cookieLife int
