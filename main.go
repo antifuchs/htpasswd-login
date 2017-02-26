@@ -31,6 +31,7 @@ var domain string
 var htpasswd string
 var realm string
 var cookieLifetime int
+var secure bool
 
 var validChars map[rune]bool
 
@@ -103,7 +104,7 @@ func validateCookie(cookie string) (*session, error) {
 }
 
 func invalidateCookie() *http.Cookie {
-	return &http.Cookie{Name: cookieName, Value: "nope", Domain: domain, Path: "/", MaxAge: -1, Secure: true, HttpOnly: true}
+	return &http.Cookie{Name: cookieName, Value: "nope", Domain: domain, Path: "/", MaxAge: -1, Secure: secure, HttpOnly: true}
 }
 
 func checkSession(w http.ResponseWriter, r *http.Request) {
@@ -253,6 +254,8 @@ func main() {
 	flag.StringVar(&htpasswd, "htpasswd", "/etc/nginx/.htpasswd", "htpasswd file to use for authentication")
 	flag.StringVar(&realm, "realm", "example.com", "HTTP Basic auth realm to pretend we run in")
 	flag.IntVar(&cookieLifetime, "lifetime", 86400, "Maximum cookie lifetime in seconds")
+	flag.BoolVar(&secure, "secure", true, "Whether to set cookies to secure (false is useful for dev)")
+
 	flag.BoolVar(&cleanup, "cleanup", false, "Perform once-in-a-while cleanup actions")
 	flag.Parse()
 
