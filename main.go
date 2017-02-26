@@ -31,6 +31,7 @@ const realm string = "example.com"
 var sessionDir string
 var domain string
 var htpasswd string
+var staticsDir string
 var cookieLifetime int
 var secure bool
 
@@ -290,7 +291,7 @@ func main() {
 	flag.StringVar(&htpasswd, "htpasswd", "/etc/nginx/.htpasswd", "htpasswd file to use for authentication")
 	flag.IntVar(&cookieLifetime, "lifetime", 86400, "Maximum cookie lifetime in seconds")
 	flag.BoolVar(&secure, "secure", true, "Whether to set cookies to secure (false is useful for dev)")
-
+	flag.StringVar(&staticsDir, "loginform", "", "Directory to serve statics from. /index.html should be the form itself.")
 	flag.BoolVar(&cleanup, "cleanup", false, "Perform once-in-a-while cleanup actions")
 	flag.Parse()
 
@@ -301,8 +302,12 @@ func main() {
 
 	mux := goji.NewMux()
 	mux.HandleFunc(pat.Get("/auth"), checkSession)
-	mux.HandleFunc(pat.Post("/login"), login)
+	mux.HandleFunc(pat.Post("/login/"), login)
 	mux.HandleFunc(pat.Post("/logout"), logout)
 
+	if staticsDir != "" {
+		statics := http.FileServer(http.Dir(staticsDir))
+		mux.Handle(pat.Get("/login/*"), http.StripPrefix("/login/", statics))
+	}
 	http.Serve(bind.Default(), mux)
 }
