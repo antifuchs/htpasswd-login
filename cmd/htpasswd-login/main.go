@@ -14,7 +14,9 @@ func main() {
 
 	bind.DefaultBind = "127.0.0.1:8000"
 
-	srv := htpasswd.Service{}
+	srv := htpasswd.Service{
+		Now: time.Now,
+	}
 
 	bind.WithFlag()
 	flag.StringVar(&srv.SessionDir, "sessions", "/var/db/http-auth/cookies", "Directory in which htpasswd-login places sessions")
