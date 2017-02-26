@@ -18,7 +18,6 @@ func main() {
 
 	bind.WithFlag()
 	flag.StringVar(&srv.SessionDir, "sessions", "/var/db/http-auth/cookies", "Directory in which htpasswd-login places sessions")
-	flag.StringVar(&srv.Domain, "domain", "", "Domain to set on all cookies")
 	flag.StringVar(&srv.Htpasswd, "htpasswd", "/etc/nginx/.htpasswd", "htpasswd file to use for authentication")
 	var cookieLife int
 	flag.IntVar(&cookieLife, "lifetime", 86400, "Maximum cookie lifetime in seconds")

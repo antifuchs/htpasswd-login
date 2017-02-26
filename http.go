@@ -29,7 +29,7 @@ func (srv *Service) Mux() *goji.Mux {
 }
 
 func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
-	newCookie := srv.invalidateCookie()
+	newCookie := srv.invalidateCookie(r.Host)
 	success := false
 
 	// Cleanup and ensure we always send a decent response:
@@ -62,7 +62,7 @@ func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv *Service) login(w http.ResponseWriter, r *http.Request) {
-	newCookie := srv.invalidateCookie()
+	newCookie := srv.invalidateCookie(r.Host)
 	success := false
 	defer func() {
 		http.SetCookie(w, newCookie)
@@ -111,7 +111,7 @@ func (srv *Service) login(w http.ResponseWriter, r *http.Request) {
 }
 
 func (srv *Service) logout(w http.ResponseWriter, r *http.Request) {
-	defer http.SetCookie(w, srv.invalidateCookie())
+	defer http.SetCookie(w, srv.invalidateCookie(r.Host))
 
 	cookie, err := r.Cookie(cookieName)
 	if err != nil {

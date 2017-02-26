@@ -39,7 +39,6 @@ type Timesource func() time.Time
 
 type Service struct {
 	SessionDir     string
-	Domain         string
 	Htpasswd       string
 	StaticsDir     string
 	CookieLifetime time.Duration
@@ -139,11 +138,11 @@ func (s *session) Valid(now Timesource, lifetime time.Duration, host string) err
 	return nil
 }
 
-func (srv *Service) invalidateCookie() *http.Cookie {
+func (srv *Service) invalidateCookie(host string) *http.Cookie {
 	return &http.Cookie{
 		Name:     cookieName,
 		Value:    "nope",
-		Domain:   srv.Domain,
+		Domain:   host,
 		Path:     "/",
 		MaxAge:   -1,
 		Secure:   srv.Secure,

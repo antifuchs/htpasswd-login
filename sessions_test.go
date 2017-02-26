@@ -39,11 +39,6 @@ func service(t *testing.T, ti *timer) (*htpasswd.Service, string, *httptest.Serv
 		Secure:         false,
 	}
 	ts := httptest.NewServer(srv.Mux())
-	u, err := url.Parse(ts.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv.Domain = u.Host
 	return srv, dir, ts
 }
 
