@@ -49,6 +49,16 @@ type session struct {
 	Created time.Time `json:"-"`
 }
 
+func (s *session) fill(name string) error {
+	t, err := time.Parse(sessionFormat, s.CreatedRaw)
+	if err != nil {
+		return err
+	}
+	s.Created = t
+	s.Name = name
+	return nil
+}
+
 func (s *session) Valid() bool {
 	sessionExpiry := s.Created.Add(time.Duration(cookieLifetime) * time.Second)
 	return sessionExpiry.After(time.Now())
@@ -79,14 +89,13 @@ func validateCookie(cookie string) (*session, error) {
 			return nil, err
 		}
 	}
-	session := session{Name: cookie}
+	session := session{}
 	json.Unmarshal(data, &session)
-	sessionStart, err := time.Parse(sessionFormat, string(session.CreatedRaw))
+	err = session.fill(cookie)
 	if err != nil {
 		os.Remove(sessionPath) // clean up the session
 		return nil, err
 	}
-	session.Created = sessionStart
 	if !session.Valid() {
 		return nil, errors.New("Session is no longer valid.")
 	}
@@ -192,20 +201,69 @@ func login(w http.ResponseWriter, r *http.Request) {
 	success = true
 }
 
+func runCleanup() {
+	deleted := 0
+	err := filepath.Walk(sessionDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if info.IsDir() {
+			if path != sessionDir {
+				return filepath.SkipDir
+			} else {
+				return nil
+			}
+		}
+		data, err := ioutil.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		var sess session
+		err = json.Unmarshal(data, &sess)
+		if err != nil {
+			fmt.Printf("Session %q was invalid JSON (%s), leaving it", path, err)
+			return nil
+		}
+		if err = sess.fill(filepath.Base(path)); err != nil {
+			fmt.Printf("Session %q has an invalid date (%s), deleting it", path, err)
+			return os.Remove(path)
+		}
+		if !sess.Valid() {
+			deleted += 1
+			return os.Remove(path)
+		}
+		return nil
+	})
+	if err != nil {
+		log.Printf("Couldn't delete sessions: %s", err)
+		os.Exit(2)
+	}
+	if deleted > 0 {
+		log.Printf("Cleaned out %d sessions from %q.", deleted, sessionDir)
+	}
+}
+
 func main() {
+	var cleanup bool
+
 	bind.DefaultBind = "127.0.0.1:8000"
+	bind.WithFlag()
 	flag.StringVar(&sessionDir, "sessions", "/var/db/http-auth/cookies", "Directory in which htpasswd-login-form places sessions")
 	flag.StringVar(&domain, "domain", "", "Domain to set on all cookies")
 	flag.StringVar(&htpasswd, "htpasswd", "/etc/nginx/.htpasswd", "htpasswd file to use for authentication")
 	flag.StringVar(&realm, "realm", "example.com", "HTTP Basic auth realm to pretend we run in")
 	flag.IntVar(&cookieLifetime, "lifetime", 86400, "Maximum cookie lifetime in seconds")
-	bind.WithFlag()
+	flag.BoolVar(&cleanup, "cleanup", false, "Perform once-in-a-while cleanup actions")
 	flag.Parse()
+
+	if cleanup {
+		runCleanup()
+		return
+	}
 
 	mux := goji.NewMux()
 	mux.HandleFunc(pat.Get("/auth"), checkSession)
 	mux.HandleFunc(pat.Post("/login"), login)
 
 	http.Serve(bind.Default(), mux)
-
 }
