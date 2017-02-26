@@ -108,7 +108,6 @@ func invalidateCookie() *http.Cookie {
 }
 
 func checkSession(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(cookieName)
 	newCookie := invalidateCookie()
 	success := false
 
@@ -122,10 +121,14 @@ func checkSession(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)
 		w.Write([]byte{})
 	}()
+
+	cookie, err := r.Cookie(cookieName)
 	if err != nil {
-		if err == http.ErrNoCookie {
-			return
+		if err != http.ErrNoCookie {
+			log.Printf("Failed getting the cookie: %s", err)
 		}
+		return
+
 	}
 	session, err := validateCookie(cookie.Value)
 	if err != nil {
@@ -244,6 +247,27 @@ func runCleanup() {
 	}
 }
 
+func logout(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie(cookieName)
+	http.SetCookie(w, invalidateCookie())
+	if err != nil {
+		if err != http.ErrNoCookie {
+			log.Printf("Failed getting the cookie: %s", err)
+		}
+		http.Redirect(w, r, "/", 301)
+		return
+	}
+
+	session, err := validateCookie(cookie.Value)
+	if err != nil {
+		log.Printf("Error validating session: %s", err)
+		http.Redirect(w, r, "/", 301)
+		return
+	}
+	os.Remove(filepath.Join(sessionDir, session.Name))
+	http.Redirect(w, r, "/", 301)
+}
+
 func main() {
 	var cleanup bool
 
@@ -267,6 +291,7 @@ func main() {
 	mux := goji.NewMux()
 	mux.HandleFunc(pat.Get("/auth"), checkSession)
 	mux.HandleFunc(pat.Post("/login"), login)
+	mux.HandleFunc(pat.Post("/logout"), logout)
 
 	http.Serve(bind.Default(), mux)
 }
