@@ -32,6 +32,12 @@ func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
 	newCookie := srv.invalidateCookie(r.Host)
 	success := false
 
+	if originalURI := r.Header.Get("X-Original-URI"); originalURI != "" {
+		// Mark the place we came from in a cookie, so we know
+		// to redirect when logging in:
+		http.SetCookie(w, srv.redirectCookie(r.Host, originalURI))
+	}
+
 	// Cleanup and ensure we always send a decent response:
 	defer func() {
 		if !success {
@@ -70,6 +76,14 @@ func (srv *Service) login(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Nope", http.StatusForbidden)
 			return
 		}
+		url, err := srv.redirectTarget(r)
+		if err != nil || url == "" {
+			log.Printf("Couldn't redirect to %q: %s", url, err)
+			fmt.Fprint(w, "OK!")
+			return
+		}
+		log.Printf("Redir target: %q", url)
+		http.Redirect(w, r, url, 302)
 	}()
 	user := r.PostFormValue("login")
 	if len(user) == 0 {
