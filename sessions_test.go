@@ -35,7 +35,7 @@ func service(t *testing.T, ti *timer) (*htpasswd.Service, string, *httptest.Serv
 		Now:            ti.now,
 		SessionDir:     dir,
 		Htpasswd:       "example/htpasswd",
-		CookieLifetime: time.Duration(1000) * time.Second,
+		CookieLifetime: time.Duration(10) * time.Second,
 		Secure:         false,
 	}
 	ts := httptest.NewServer(srv.Mux())

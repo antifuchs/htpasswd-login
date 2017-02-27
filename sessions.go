@@ -26,7 +26,7 @@ const realm string = "example.com"
 // Max amount of time we assume that minting a cookie might take - if
 // it takes longer, the session is not valid before the browser
 // receives it.
-const slack time.Duration = time.Duration(-10) * time.Second
+const slack time.Duration = time.Duration(-100) * time.Millisecond
 
 var validChars map[rune]bool
 
@@ -124,7 +124,7 @@ func (srv *Service) ValidatedSessionFromStorage(cookie, host string) (*session, 
 
 func (s *session) ExpiredAt(when time.Time, lifetime time.Duration) bool {
 	sessionExpiry := s.Created.Add(lifetime)
-	return !sessionExpiry.After(when)
+	return when.After(sessionExpiry)
 }
 
 // Checks that a given session object is not expired and minted for
@@ -182,7 +182,7 @@ func (srv *Service) invalidateCookie(host string) *http.Cookie {
 	}
 }
 
-func (srv *Service) newSession(domain, user string) (string, error) {
+func (srv *Service) NewSession(domain, user string) (string, error) {
 	name := uniuri.NewLen(90)
 	sessionPath := filepath.Join(srv.SessionDir, name)
 	data, err := json.Marshal(storedSession{

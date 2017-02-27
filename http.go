@@ -111,7 +111,7 @@ func (srv *Service) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	session, err := srv.newSession(r.Host, user)
+	session, err := srv.NewSession(r.Host, user)
 	if err != nil {
 		return
 	}

@@ -9,6 +9,7 @@ import (
 
 func (srv *Service) RunCleanup() {
 	deleted := 0
+	now := srv.Now()
 	err := filepath.Walk(srv.SessionDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return nil
@@ -31,7 +32,7 @@ func (srv *Service) RunCleanup() {
 			return nil
 		}
 
-		if !sess.ExpiredAt(srv.Now(), srv.CookieLifetime) {
+		if sess.ExpiredAt(now, srv.CookieLifetime) {
 			deleted += 1
 			return os.Remove(path)
 		}
