@@ -36,7 +36,7 @@ job once an hour or so, in order to clean out old sessions.
 
 ## Configuring nginx
 
-See the file [auth_request.inc.conf](examples/auth_request.inc.conf)
+See the file [auth_request.inc.conf](example/auth_request.inc.conf)
 in examples for an example config. Note that in addition to including
 this file in your `server` blocks, you'll also have to have an
 `auth_request /auth` stanza in every `location` block you wish to
