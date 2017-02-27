@@ -250,92 +250,143 @@ func TestMalice(t *testing.T) {
 	}
 }
 
-func TestLoginRedirect(t *testing.T) {
+func TestLoginRedirectValid(t *testing.T) {
+	t.Parallel()
+	ti := &timer{at: time.Unix(0, 0)}
+	_, dir, ts := service(t, ti)
+	defer ts.Close()
+	defer os.RemoveAll(dir)
+	cj, _ := cookiejar.New(nil)
+	cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
+	req, err := http.NewRequest("GET", ts.URL+"/auth", nil)
+	redirURL := "/wheee"
+	req.Header.Set("X-Original-URI", redirURL)
+	resp, err := cl.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	params := url.Values{}
+	params.Set("login", "test@example.com")
+	params.Set("password", "test")
+	resp, err = cl.PostForm(ts.URL+"/login/", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("Should be authenticated and redirected, but: %v", resp)
+	}
+	loc, _ := resp.Location()
+	if loc.Path != redirURL {
+		t.Errorf("Should be on %q, but am on %q", redirURL, loc)
+	}
+}
+
+func TestLoginRedirectMultiple(t *testing.T) {
+	t.Parallel()
+	ti := &timer{at: time.Unix(0, 0)}
+	_, dir, ts := service(t, ti)
+	defer ts.Close()
+	defer os.RemoveAll(dir)
+	cj, _ := cookiejar.New(nil)
+	cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
+	req, err := http.NewRequest("GET", ts.URL+"/auth", nil)
+	redirURL := "/wheee"
+	req.Header.Set("X-Original-URI", redirURL)
+	resp, err := cl.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req, err = http.NewRequest("GET", ts.URL+"/auth", nil)
+	req.Header.Set("X-Original-URI", ts.URL+"/wheee/favicon.ico")
+	resp, err = cl.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	params := url.Values{}
+	params.Set("login", "test@example.com")
+	params.Set("password", "test")
+	resp, err = cl.PostForm(ts.URL+"/login/", params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusFound {
+		t.Fatalf("Should be authenticated and redirected, but: %v", resp)
+	}
+	loc, _ := resp.Location()
+	if loc.Path != redirURL {
+		t.Errorf("Should be on %q, but am on %q", redirURL, loc)
+	}
+}
+
+func TestLoginRedirectNoData(t *testing.T) {
+	t.Parallel()
+	ti := &timer{at: time.Unix(0, 0)}
+	_, dir, ts := service(t, ti)
+	defer ts.Close()
+	defer os.RemoveAll(dir)
+
+	cj, _ := cookiejar.New(nil)
+	cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
+	params := url.Values{}
+	params.Set("login", "test@example.com")
+	params.Set("password", "test")
+	req, err := http.NewRequest("POST", ts.URL+"/login/", strings.NewReader(params.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := cl.Do(req)
+	if err != nil {
+		t.Error(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Should be authenticated and not redirected, but: %v", resp)
+	}
+}
+
+func TestLoginRedirectInvalid(t *testing.T) {
 	t.Parallel()
 	ti := &timer{at: time.Unix(0, 0)}
 	srv, dir, ts := service(t, ti)
 	defer ts.Close()
 	defer os.RemoveAll(dir)
-	{ // Redirecting to a valid URL
-		cj, _ := cookiejar.New(nil)
-		cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
-		req, err := http.NewRequest("GET", ts.URL+"/auth", nil)
-		redirURL := "/wheee"
-		req.Header.Set("X-Original-URI", redirURL)
-		resp, err := cl.Do(req)
-		if err != nil {
-			t.Fatal(err)
-		}
 
-		params := url.Values{}
-		params.Set("login", "test@example.com")
-		params.Set("password", "test")
-		resp, err = cl.PostForm(ts.URL+"/login/", params)
-		if err != nil {
-			t.Fatal(err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusFound {
-			t.Fatalf("Should be authenticated and redirected, but: %v", resp)
-		}
-		loc, _ := resp.Location()
-		if loc.Path != redirURL {
-			t.Errorf("Should be on %q, but am on %q", redirURL, loc)
-		}
+	cj, _ := cookiejar.New(nil)
+	cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
+	params := url.Values{}
+	params.Set("login", "test@example.com")
+	params.Set("password", "test")
+	req, err := http.NewRequest("POST", ts.URL+"/login/", strings.NewReader(params.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	redirURL := strings.Replace(ts.URL+"/wheee/", "127.0.0.1", "localhost", 1)
+	ck := &http.Cookie{
+		Name:     "_htpasswd_uri",
+		Value:    redirURL,
+		Domain:   "127.0.0.1",
+		Path:     "/",
+		MaxAge:   0,
+		Secure:   srv.Secure,
+		HttpOnly: true,
 	}
-	{ // Non-redirect case
-		cj, _ := cookiejar.New(nil)
-		cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
-		params := url.Values{}
-		params.Set("login", "test@example.com")
-		params.Set("password", "test")
-		req, err := http.NewRequest("POST", ts.URL+"/login/", strings.NewReader(params.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		if err != nil {
-			t.Fatal(err)
-		}
-		resp, err := cl.Do(req)
-		if err != nil {
-			t.Error(err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("Should be authenticated and not redirected, but: %v", resp)
-		}
+	req.AddCookie(ck)
+	if err != nil {
+		t.Fatal(err)
 	}
-	{ // Redirecting to an invalid URL
-		cj, _ := cookiejar.New(nil)
-		cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
-		params := url.Values{}
-		params.Set("login", "test@example.com")
-		params.Set("password", "test")
-		req, err := http.NewRequest("POST", ts.URL+"/login/", strings.NewReader(params.Encode()))
-		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-		redirURL := strings.Replace(ts.URL+"/wheee/", "127.0.0.1", "localhost", 1)
-		ck := &http.Cookie{
-			Name:     "_htpasswd_uri",
-			Value:    redirURL,
-			Domain:   "127.0.0.1",
-			Path:     "/",
-			MaxAge:   0,
-			Secure:   srv.Secure,
-			HttpOnly: true,
-		}
-		req.AddCookie(ck)
-		if err != nil {
-			t.Fatal(err)
-		}
-		resp, err := cl.Do(req)
-		if err != nil {
-			t.Error(err)
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("Should be authenticated and redirected, but: %v", resp)
-		}
-		loc, err := resp.Location()
-		if err == nil {
-			t.Errorf("Should not have gotten redirected to %q", loc)
-		}
+	resp, err := cl.Do(req)
+	if err != nil {
+		t.Error(err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("Should be authenticated and redirected, but: %v", resp)
+	}
+	loc, err := resp.Location()
+	if err == nil {
+		t.Errorf("Should not have gotten redirected to %q", loc)
 	}
 }

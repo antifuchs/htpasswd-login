@@ -33,9 +33,13 @@ func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
 	success := false
 
 	if originalURI := r.Header.Get("X-Original-URI"); originalURI != "" {
-		// Mark the place we came from in a cookie, so we know
-		// to redirect when logging in:
-		http.SetCookie(w, srv.redirectCookie(r.Host, originalURI))
+		redirCookie := srv.redirectCookie(r.Host, originalURI)
+		if _, err := r.Cookie(redirCookie.Name); err == http.ErrNoCookie {
+			// Mark the place we came from (the first
+			// time!) in a cookie, so we know to redirect
+			// when logging in:
+			http.SetCookie(w, redirCookie)
+		}
 	}
 
 	// Cleanup and ensure we always send a decent response:
