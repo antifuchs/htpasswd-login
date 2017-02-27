@@ -260,7 +260,7 @@ func TestLoginRedirect(t *testing.T) {
 		cj, _ := cookiejar.New(nil)
 		cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
 		req, err := http.NewRequest("GET", ts.URL+"/auth", nil)
-		redirURL := ts.URL + "/wheee"
+		redirURL := "/wheee"
 		req.Header.Set("X-Original-URI", redirURL)
 		resp, err := cl.Do(req)
 		if err != nil {
@@ -279,8 +279,8 @@ func TestLoginRedirect(t *testing.T) {
 			t.Fatalf("Should be authenticated and redirected, but: %v", resp)
 		}
 		loc, _ := resp.Location()
-		if loc.String() != redirURL {
-			t.Errorf("Should be on %q, but am on %q", ts.URL+"/wheee/", loc)
+		if loc.Path != redirURL {
+			t.Errorf("Should be on %q, but am on %q", redirURL, loc)
 		}
 	}
 	{ // Non-redirect case

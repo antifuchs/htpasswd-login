@@ -152,7 +152,7 @@ func (srv *Service) redirectTarget(r *http.Request) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if u.Host != r.Host {
+	if u.Host != "" && u.Host != r.Host {
 		return "", fmt.Errorf("Redirect cookie %q didn't match the host we expected: %q", u.Host, r.Host)
 	}
 	return cookie.Value, nil
