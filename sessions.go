@@ -37,8 +37,11 @@ func init() {
 	}
 }
 
+// Timesource provides a timestamp to aid testing.
 type Timesource func() time.Time
 
+// Service represents an http service that does session-based
+// authentication.
 type Service struct {
 	SessionDir     string
 	Htpasswd       string
@@ -48,11 +51,16 @@ type Service struct {
 	Now            Timesource
 }
 
-type session struct {
-	Created  time.Time
-	Domain   string
+// Session is a (potentially authenticated) user's session.
+type Session struct {
+	// Created is the time that the session was first initiated.
+	Created time.Time
+	// Domain is the http host name that the session is valid for.
+	Domain string
+	// Username is the authenticated user's name, if they are authenticated.
 	Username string
-	Name     string
+	// Name is the cookie ID (also the session's file name on disk.)
+	Name string
 }
 
 type storedSession struct {
@@ -64,10 +72,10 @@ type storedSession struct {
 // Loads a session structure from disk and returns a plausible-looking
 // session that might be expired or have an invalid domain. You
 // probably want Service.ValidatedSessionFromStorage instead.
-func (srv *Service) unvalidatedSessionFromStorage(cookie string) (*session, error) {
+func (srv *Service) unvalidatedSessionFromStorage(cookie string) (*Session, error) {
 	for _, c := range cookie {
 		if _, ok := validChars[c]; !ok {
-			return nil, errors.New("Cookie value contains invalid characters.")
+			return nil, errors.New("cookie value contains invalid characters")
 		}
 	}
 	sessionPath := filepath.Join(srv.SessionDir, cookie)
@@ -85,17 +93,16 @@ func (srv *Service) unvalidatedSessionFromStorage(cookie string) (*session, erro
 		if os.IsNotExist(err) {
 			log.Printf("Request for a session that doesn't exist: %q", sessionPath)
 			return nil, err
-		} else {
-			log.Printf("Checking session %q failed: %s", sessionPath, err)
-			return nil, err
 		}
+		log.Printf("Checking session %q failed: %s", sessionPath, err)
+		return nil, err
 	}
 	sj := storedSession{}
 	err = json.Unmarshal(data, &sj)
 	if err != nil {
 		return nil, err
 	}
-	session := session{
+	session := Session{
 		Domain:   sj.Domain,
 		Username: sj.Username,
 		Name:     cookie,
@@ -108,10 +115,10 @@ func (srv *Service) unvalidatedSessionFromStorage(cookie string) (*session, erro
 	return &session, err
 }
 
-// Loads a session structure from disk and checks it for validity. If
-// this returns a nil error, the session is valid, for the expected
-// hostname, and is not expired.
-func (srv *Service) ValidatedSessionFromStorage(cookie, host string) (*session, error) {
+// ValidatedSessionFromStorage loads a session structure from disk and
+// checks it for validity. If this returns a nil error, the session is
+// valid, for the expected hostname, and is not expired.
+func (srv *Service) ValidatedSessionFromStorage(cookie, host string) (*Session, error) {
 	session, err := srv.unvalidatedSessionFromStorage(cookie)
 	if err != nil {
 		return nil, err
@@ -122,20 +129,22 @@ func (srv *Service) ValidatedSessionFromStorage(cookie, host string) (*session, 
 	return session, nil
 }
 
-func (s *session) ExpiredAt(when time.Time, lifetime time.Duration) bool {
+// ExpiredAt tests whether a session has expired, given the timestamp
+// and the session lifetime.
+func (s *Session) ExpiredAt(when time.Time, lifetime time.Duration) bool {
 	sessionExpiry := s.Created.Add(lifetime)
 	return when.After(sessionExpiry)
 }
 
-// Checks that a given session object is not expired and minted for
-// the expected host.
-func (s *session) Valid(now Timesource, lifetime time.Duration, host string) error {
+// Valid checks that a given session object is not expired and minted
+// for the expected host.
+func (s *Session) Valid(now Timesource, lifetime time.Duration, host string) error {
 	if s.ExpiredAt(now(), lifetime) {
-		return errors.New("Session is no longer valid.")
+		return errors.New("session is no longer valid")
 	}
 
 	if s.Domain != host {
-		return fmt.Errorf("Session hostname %q does not match the request hostname %q.", s.Domain, host)
+		return fmt.Errorf("session hostname %q does not match the request hostname %q", s.Domain, host)
 	}
 	return nil
 }
@@ -182,6 +191,8 @@ func (srv *Service) invalidateCookie(host string) *http.Cookie {
 	}
 }
 
+// NewSession creates a new session for a given domain and an
+// authenticated user.
 func (srv *Service) NewSession(domain, user string) (string, error) {
 	name := uniuri.NewLen(90)
 	sessionPath := filepath.Join(srv.SessionDir, name)

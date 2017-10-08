@@ -15,6 +15,8 @@ import (
 	"goji.io/pat"
 )
 
+// Mux constructs a goji mux that performs authentication with the
+// service.
 func (srv *Service) Mux() *goji.Mux {
 	mux := goji.NewMux()
 	mux.HandleFunc(pat.Get("/auth"), srv.checkSession)
@@ -146,6 +148,11 @@ func (srv *Service) logout(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/", 301)
 		return
 	}
-	os.Remove(filepath.Join(srv.SessionDir, session.Name))
+	err = os.Remove(filepath.Join(srv.SessionDir, session.Name))
+	if err != nil {
+		// This is relatively peaceful, provided the client
+		// throws away the session cookie:
+		log.Printf("Error deleting session file on logout: %v", err)
+	}
 	http.Redirect(w, r, "/", 301)
 }

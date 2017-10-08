@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 )
 
+// RunCleanup traverses the service's session directory and deletes
+// expired sessions.
 func (srv *Service) RunCleanup() {
 	deleted := 0
 	now := srv.Now()
@@ -17,9 +19,8 @@ func (srv *Service) RunCleanup() {
 		if info.IsDir() {
 			if path != srv.SessionDir {
 				return filepath.SkipDir
-			} else {
-				return nil
 			}
+			return nil
 		}
 		name, err := filepath.Rel(srv.SessionDir, path)
 		if err != nil {
@@ -33,7 +34,7 @@ func (srv *Service) RunCleanup() {
 		}
 
 		if sess.ExpiredAt(now, srv.CookieLifetime) {
-			deleted += 1
+			deleted++
 			return os.Remove(path)
 		}
 		return nil
