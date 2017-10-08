@@ -6,6 +6,8 @@ import (
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestCleanup(t *testing.T) {
@@ -17,7 +19,8 @@ func TestCleanup(t *testing.T) {
 
 	t.Logf("T at start:   %s", ti.at)
 	for i := 0; i < int(srv.CookieLifetime/time.Second)+2; i++ {
-		srv.NewSession(strconv.Itoa(i), "example.com")
+		_, err := srv.NewSession(strconv.Itoa(i), "example.com")
+		require.NoError(t, err)
 		ti.at = ti.at.Add(1 * time.Second)
 	}
 	ti.at = ti.at.Add(1 * time.Second)
@@ -31,16 +34,13 @@ func TestCleanup(t *testing.T) {
 		if info.IsDir() {
 			if path != srv.SessionDir {
 				return filepath.SkipDir
-			} else {
-				return nil
 			}
+			return nil
 		}
 		existingSessions++
 		return nil
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	expected := int(srv.CookieLifetime/time.Second) - 3
 	if existingSessions < expected || existingSessions == 0 {
 		t.Errorf("Expected about %d sessions, got %d", expected, existingSessions)
