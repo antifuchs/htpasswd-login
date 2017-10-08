@@ -14,6 +14,8 @@ import (
 	"strings"
 
 	htpasswd "github.com/antifuchs/htpasswd-login"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type timer struct {
@@ -50,35 +52,25 @@ func TestGoodLogin(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	cj, err := cookiejar.New(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	cl := http.Client{Jar: cj}
 	params := url.Values{}
 	params.Set("login", "test@example.com")
 	params.Set("password", "test")
 	resp, err := cl.PostForm(ts.URL+"/login/", params)
-	if err != nil {
-		t.Error(err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Login should have succeeded: %v", resp)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Login should have succeeded")
 	t.Log(resp.Cookies())
-	if len(resp.Cookies()) == 0 || resp.Cookies()[0].Value == "nope" {
-		t.Errorf("I bad cookies: %#v", resp.Cookies())
+	if assert.NotEmpty(t, resp.Cookies()) {
+		assert.NotEqual(t, "nope", resp.Cookies()[0].Value)
 	}
 
 	u, _ := url.Parse(ts.URL)
 	t.Log(cj.Cookies(u))
 
 	resp, err = cl.Get(ts.URL + "/auth")
-	if err != nil {
-		t.Error(err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("Should be authenticated, am not: %v", resp)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Should be authenticated, but I'm not")
 }
 
 func TestBadLogin(t *testing.T) {
@@ -98,12 +90,8 @@ func TestBadLogin(t *testing.T) {
 	params.Set("login", "test@example.com")
 	params.Set("password", "wrongpassword")
 	resp, err := cl.PostForm(ts.URL+"/login/", params)
-	if err != nil {
-		t.Error(err)
-	}
-	if resp.StatusCode != http.StatusForbidden {
-		t.Errorf("Should have failed: %v", resp)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "Login should have failed")
 }
 
 func TestExpiredSession(t *testing.T) {
@@ -122,21 +110,15 @@ func TestExpiredSession(t *testing.T) {
 	params.Set("login", "test@example.com")
 	params.Set("password", "test")
 	resp, err := cl.PostForm(ts.URL+"/login/", params)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Should be authenticated, am not: %v", resp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode,
+		"Should be authenticated, am not: %v", resp)
 
 	ti.at = ti.at.Add(time.Duration(5) * time.Second).Add(srv.CookieLifetime)
 	resp, err = cl.Get(ts.URL + "/auth")
-	if err != nil {
-		t.Error(err)
-	}
-	if resp.StatusCode == http.StatusOK {
-		t.Errorf("Should no longer be authenticated, but I am: %v and %v", resp, cj)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode,
+		"Should no longer be authenticated, but I am: %v and %v", resp, cj)
 }
 
 func TestBadDomain(t *testing.T) {
@@ -162,20 +144,14 @@ func TestBadDomain(t *testing.T) {
 	// will fail:
 	otherURL := strings.Replace(ts.URL, "127.0.0.1", "localhost", 1)
 	resp, err := cl.PostForm(otherURL+"/login/", params)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Should be authenticated, am not: %v", resp)
-	}
+	require.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode,
+		"Should be authenticated, am not: %v", resp)
 
 	resp, err = cl.Get(ts.URL + "/auth")
-	if err != nil {
-		t.Error(err)
-	}
-	if resp.StatusCode == http.StatusOK {
-		t.Errorf("Should not be authenticated under this domain, but I am: %v and %v", resp, cj)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode,
+		"Should not be authenticated under this domain, but I am: %v and %v", resp, cj)
 }
 
 func TestLogout(t *testing.T) {
@@ -193,17 +169,15 @@ func TestLogout(t *testing.T) {
 	params.Set("login", "test@example.com")
 	params.Set("password", "test")
 	_, err = cl.PostForm(ts.URL+"/login/", params)
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, err)
 
-	// redirects god-knows-where, so no error checking:
-	cl.PostForm(ts.URL+"/logout", url.Values{})
+	resp, err := cl.PostForm(ts.URL+"/logout", url.Values{})
+	require.NoError(t, err)
+	defer resp.Body.Close()
 
-	resp, err := cl.Get(ts.URL + "/auth")
-	if resp.StatusCode != http.StatusUnauthorized {
-		t.Errorf("Should be unauthenticated, am not: %v", resp)
-	}
+	resp, err = cl.Get(ts.URL + "/auth")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 }
 
 func TestMalice(t *testing.T) {
@@ -213,41 +187,31 @@ func TestMalice(t *testing.T) {
 	defer ts.Close()
 	defer os.RemoveAll(dir)
 	cj, err := cookiejar.New(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	cl := http.Client{Jar: cj}
 	params := url.Values{}
 	params.Set("login", "test@example.com")
 	params.Set("password", "test")
 	resp, err := cl.PostForm(ts.URL+"/login/", params)
-	if err != nil {
-		t.Error(err)
-	}
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Should be authenticated, am not: %v", resp)
-	}
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode)
+
 	session := resp.Cookies()[0].Value
 	u, _ := url.Parse(ts.URL)
 	_, err = srv.ValidatedSessionFromStorage(dir+"/"+session, u.Host)
-	if err == nil {
-		t.Error(dir)
-	}
+	assert.Error(t, err)
 
 	relative := filepath.Join("../", filepath.Base(dir), session)
 	_, err = srv.ValidatedSessionFromStorage(relative, u.Host)
-	if err == nil {
-		t.Error("relative", relative)
-	}
+	assert.Error(t, err, "relative")
 
 	slashes := "////" + dir + "/" + session
-	if _, err := os.Stat(slashes); os.IsNotExist(err) {
-		t.Error("slashes file doesn't exist")
-	}
+	_, err = os.Stat(slashes)
+	assert.False(t, os.IsNotExist(err), "slashes file doesn't exist")
+
 	_, err = srv.ValidatedSessionFromStorage("////"+dir+"/"+session, u.Host)
-	if err == nil {
-		t.Error("/////")
-	}
+	assert.Error(t, err, "///// validated but shouldn't")
 }
 
 func TestLoginRedirectValid(t *testing.T) {
@@ -259,28 +223,24 @@ func TestLoginRedirectValid(t *testing.T) {
 	cj, _ := cookiejar.New(nil)
 	cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
 	req, err := http.NewRequest("GET", ts.URL+"/auth", nil)
+	require.NoError(t, err)
+
 	redirURL := "/wheee"
 	req.Header.Set("X-Original-URI", redirURL)
 	resp, err := cl.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 
 	params := url.Values{}
 	params.Set("login", "test@example.com")
 	params.Set("password", "test")
 	resp, err = cl.PostForm(ts.URL+"/login/", params)
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusFound {
-		t.Fatalf("Should be authenticated and redirected, but: %v", resp)
-	}
+	assert.Equal(t, http.StatusFound, resp.StatusCode, "Should be redirected post successful authentication")
+
 	loc, _ := resp.Location()
-	if loc.Path != redirURL {
-		t.Errorf("Should be on %q, but am on %q", redirURL, loc)
-	}
+	assert.Equal(t, redirURL, loc.Path, "Didn't get redirected to the right place")
 }
 
 func TestLoginRedirectMultiple(t *testing.T) {
@@ -292,33 +252,30 @@ func TestLoginRedirectMultiple(t *testing.T) {
 	cj, _ := cookiejar.New(nil)
 	cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
 	req, err := http.NewRequest("GET", ts.URL+"/auth", nil)
+	require.NoError(t, err)
 	redirURL := "/wheee"
 	req.Header.Set("X-Original-URI", redirURL)
-	resp, err := cl.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = cl.Do(req)
+	require.NoError(t, err)
+
 	req, err = http.NewRequest("GET", ts.URL+"/auth", nil)
+	require.NoError(t, err)
+
 	req.Header.Set("X-Original-URI", ts.URL+"/wheee/favicon.ico")
-	resp, err = cl.Do(req)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, err = cl.Do(req)
+	require.NoError(t, err)
 
 	params := url.Values{}
 	params.Set("login", "test@example.com")
 	params.Set("password", "test")
-	resp, err = cl.PostForm(ts.URL+"/login/", params)
-	if err != nil {
-		t.Fatal(err)
-	}
+	resp, err := cl.PostForm(ts.URL+"/login/", params)
+	require.NoError(t, err)
+
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusFound {
-		t.Fatalf("Should be authenticated and redirected, but: %v", resp)
-	}
-	loc, _ := resp.Location()
-	if loc.Path != redirURL {
-		t.Errorf("Should be on %q, but am on %q", redirURL, loc)
+	if assert.Equal(t, http.StatusFound, resp.StatusCode,
+		"Should be authenticated and redirected, but: %v", resp) {
+		loc, _ := resp.Location()
+		assert.Equal(t, redirURL, loc.Path, "Got redirected to the wrong place")
 	}
 }
 
@@ -336,17 +293,14 @@ func TestLoginRedirectNoData(t *testing.T) {
 	params.Set("password", "test")
 	req, err := http.NewRequest("POST", ts.URL+"/login/", strings.NewReader(params.Encode()))
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
+
 	resp, err := cl.Do(req)
-	if err != nil {
-		t.Error(err)
-	}
+	assert.NoError(t, err)
+
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Should be authenticated and not redirected, but: %v", resp)
-	}
+	assert.Equal(t, http.StatusOK, resp.StatusCode,
+		"Should be authenticated and not redirected, but: %v", resp)
 }
 
 func TestLoginRedirectInvalid(t *testing.T) {
@@ -362,6 +316,8 @@ func TestLoginRedirectInvalid(t *testing.T) {
 	params.Set("login", "test@example.com")
 	params.Set("password", "test")
 	req, err := http.NewRequest("POST", ts.URL+"/login/", strings.NewReader(params.Encode()))
+	require.NoError(t, err)
+
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	redirURL := strings.Replace(ts.URL+"/wheee/", "127.0.0.1", "localhost", 1)
 	ck := &http.Cookie{
@@ -374,19 +330,16 @@ func TestLoginRedirectInvalid(t *testing.T) {
 		HttpOnly: true,
 	}
 	req.AddCookie(ck)
-	if err != nil {
-		t.Fatal(err)
-	}
+
 	resp, err := cl.Do(req)
-	if err != nil {
-		t.Error(err)
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("Should be authenticated and redirected, but: %v", resp)
-	}
-	loc, err := resp.Location()
-	if err == nil {
-		t.Errorf("Should not have gotten redirected to %q", loc)
+	if assert.NoError(t, err) {
+		defer resp.Body.Close()
+
+		assert.Equal(t, http.StatusOK, resp.StatusCode,
+			"Should be authenticated, but: %v", resp)
+
+		loc, err := resp.Location()
+		assert.Error(t, err)
+		assert.Nil(t, loc, "Should not have gotten redirected")
 	}
 }
