@@ -6,10 +6,13 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 
 	auth "github.com/abbot/go-http-auth"
+
+	"net/url"
 
 	goji "goji.io"
 	"goji.io/pat"
@@ -30,16 +33,56 @@ func (srv *Service) Mux() *goji.Mux {
 	return mux
 }
 
+func isParent(new, existing string) bool {
+	for ; existing != "/" && existing != ""; existing = path.Dir(existing) {
+		if new == existing || new+"/" == existing {
+			return true
+		}
+	}
+	return existing == new
+}
+
+// Checks if a URL is more relevant (that is, has less qualifiers)
+// than another. It returns true if newStr is more specific than
+// existingStr. This is a heuristic based on my experience with the
+// way browsers make requests to sites behind htpasswd_auth; it will
+// likely break if you have framesets with references in the
+// right/wrong places, or other edge cases.
+func moreRelevant(newStr, existingStr string) bool {
+	new, err := url.Parse(newStr)
+	if err != nil {
+		return false
+	}
+	existing, err := url.Parse(existingStr)
+	if err != nil {
+		return true
+	}
+
+	// If the new URL is in a completely different location, it's
+	// more specific:
+	if existing.Host != new.Host || existing.Scheme != new.Scheme {
+		return true
+	}
+
+	// If the new URL's path is an ancestor of the existing one
+	// (or it's a completely different dir altogether), it's more
+	// specific:
+	return isParent(new.Path, existing.Path) || !isParent(existing.Path, new.Path)
+}
+
 func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
 	newCookie := srv.invalidateCookie(r.Host)
 	success := false
 
 	if originalURI := r.Header.Get("X-Original-URI"); originalURI != "" {
 		redirCookie := srv.redirectCookie(r.Host, originalURI)
-		if _, err := r.Cookie(redirCookie.Name); err == http.ErrNoCookie {
-			// Mark the place we came from (the first
-			// time!) in a cookie, so we know to redirect
-			// when logging in:
+		existing, err := r.Cookie(redirCookie.Name)
+		if err == http.ErrNoCookie || moreRelevant(originalURI, existing.Value) {
+			// Mark the place we came from (if the user
+			// visited a page more specific than any
+			// existing earmarked one, e.g. / after
+			// visiting /favicon.ico) in a cookie, so we
+			// know to redirect when logging in:
 			http.SetCookie(w, redirCookie)
 		}
 	}

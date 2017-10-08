@@ -254,7 +254,7 @@ func TestLoginRedirectMultiple(t *testing.T) {
 	req, err := http.NewRequest("GET", ts.URL+"/auth", nil)
 	require.NoError(t, err)
 	redirURL := "/wheee"
-	req.Header.Set("X-Original-URI", redirURL)
+	req.Header.Set("X-Original-URI", ts.URL+redirURL)
 	_, err = cl.Do(req)
 	require.NoError(t, err)
 
