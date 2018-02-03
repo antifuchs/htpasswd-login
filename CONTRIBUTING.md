@@ -16,3 +16,7 @@ Feel free to:
 * [Report issues](../../issues)
 * [Send me a pull request](../../pulls) or
 * Just get in touch with me: asf@boinkor.net!
+
+## Found a security issue?
+
+If you find a bug in this program that might be security-relevant, feel free to reach out to [the author](mailto:asf@boinkor.net) with an encrypted message. You can find the most current OpenPGP keys (and other encrypted contact methods) on [keybase](https://keybase.io/asf)!
