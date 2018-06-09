@@ -83,6 +83,11 @@ authentication (namely, that you can use `.htpasswd` files, which are
 very well understood and easy to manipulate), with a nice and
 accessible way for your users to log in.
 
+As an accomodation for native apps that act as API clients, requests
+bearing an HTTP Basic `Authorization` header matching the credentials
+in the `.htpasswd` file count as authenticated. So you *can* use Basic
+authentication, however your users won't receive a login prompt.
+
 ### Why not build authentication into a the thing you're running behind the scenes?
 
 That mostly has to do with the amount of trust I'm willing to place in

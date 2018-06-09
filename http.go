@@ -70,7 +70,23 @@ func moreRelevant(newStr, existingStr string) bool {
 	return isParent(new.Path, existing.Path) || !isParent(existing.Path, new.Path)
 }
 
+func (srv *Service) hasCorrectBasicAuth(r *http.Request) bool {
+	if _, _, ok := r.BasicAuth(); ok {
+		authenticator := auth.NewBasicAuthenticator(realm, auth.HtpasswdFileProvider(srv.Htpasswd))
+		return authenticator.CheckAuth(r) != ""
+	}
+	return false
+}
+
 func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
+	// Short-circuit setting up a session when the request holds
+	// the correct HTTP basic auth (e.g. it's an API client):
+	if srv.hasCorrectBasicAuth(r) {
+		w.WriteHeader(200)
+		w.Write([]byte{})
+		return
+	}
+
 	newCookie := srv.invalidateCookie(r.Host)
 	success := false
 

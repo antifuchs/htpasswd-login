@@ -343,3 +343,45 @@ func TestLoginRedirectInvalid(t *testing.T) {
 		assert.Nil(t, loc, "Should not have gotten redirected")
 	}
 }
+
+func TestGoodHTTPBasicAuth(t *testing.T) {
+	t.Parallel()
+	ti := &timer{at: time.Now()}
+	_, dir, ts := service(t, ti)
+	defer ts.Close()
+	defer os.RemoveAll(dir)
+
+	cj, err := cookiejar.New(nil)
+	require.NoError(t, err)
+	cl := http.Client{Jar: cj}
+
+	req, err := http.NewRequest("GET", ts.URL+"/auth", nil)
+	require.NoError(t, err)
+	req.SetBasicAuth("test@example.com", "test")
+	resp, err := cl.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Should be authenticated!")
+	assert.Empty(t, resp.Cookies(), "Should not have received cookies back")
+}
+
+func TestBadHTTPBasicAuth(t *testing.T) {
+	t.Parallel()
+	ti := &timer{at: time.Now()}
+	_, dir, ts := service(t, ti)
+	defer ts.Close()
+	defer os.RemoveAll(dir)
+
+	cj, err := cookiejar.New(nil)
+	require.NoError(t, err)
+	cl := http.Client{Jar: cj}
+
+	req, err := http.NewRequest("GET", ts.URL+"/auth", nil)
+	require.NoError(t, err)
+	req.SetBasicAuth("test@example.com", "wrongpass")
+	resp, err := cl.Do(req)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "Should not be authenticated!")
+	if assert.NotEmpty(t, resp.Cookies()) {
+		assert.Equal(t, "nope", resp.Cookies()[0].Value)
+	}
+}
