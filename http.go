@@ -83,7 +83,6 @@ func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
 	// the correct HTTP basic auth (e.g. it's an API client):
 	if srv.hasCorrectBasicAuth(r) {
 		w.WriteHeader(200)
-		w.Write([]byte{})
 		return
 	}
 
@@ -111,7 +110,6 @@ func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		w.WriteHeader(200)
-		w.Write([]byte{})
 	}()
 	cookie, err := r.Cookie(cookieName)
 	if err != nil {
@@ -129,7 +127,6 @@ func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
 	// We have a valid session that hasn't yet expired. Let's call it a success.
 	w.Header().Set(usernameHeader, session.Username)
 	success = true
-	return
 }
 
 func (srv *Service) login(w http.ResponseWriter, r *http.Request) {

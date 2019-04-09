@@ -229,6 +229,7 @@ func TestLoginRedirectValid(t *testing.T) {
 	req.Header.Set("X-Original-URI", redirURL)
 	resp, err := cl.Do(req)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 
 	params := url.Values{}
 	params.Set("login", "test@example.com")
