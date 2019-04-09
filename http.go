@@ -82,7 +82,7 @@ func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
 	// Short-circuit setting up a session when the request holds
 	// the correct HTTP basic auth (e.g. it's an API client):
 	if srv.hasCorrectBasicAuth(r) {
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 		return
 	}
 
@@ -109,7 +109,7 @@ func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Session is not/no longer valid", http.StatusUnauthorized)
 			return
 		}
-		w.WriteHeader(200)
+		w.WriteHeader(http.StatusOK)
 	}()
 	cookie, err := r.Cookie(cookieName)
 	if err != nil {
