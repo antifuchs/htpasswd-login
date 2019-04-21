@@ -150,6 +150,9 @@ func (s *Session) Valid(now Timesource, lifetime time.Duration, host string) err
 }
 
 func (srv *Service) redirectTarget(r *http.Request) (string, error) {
+	if formTarget := r.PostFormValue("redirect"); formTarget != "" {
+		return formTarget, nil
+	}
 	cookie, err := r.Cookie(origTargetName)
 	if err != nil {
 		if err == http.ErrNoCookie {

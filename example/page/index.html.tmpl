@@ -11,6 +11,7 @@
           <section class="basic-info">
             <input type="email" name="login" placeholder="email address" tabindex="1" autofocus required>
             <input type="password" name="password" placeholder="password" tabindex="2" required>
+            <input type="hidden" name="redirect" value="{{ .Redirect }}">
             <input type="submit" tabindex="4" value="Login">
           </section>
           <p class="message">
