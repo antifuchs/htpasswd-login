@@ -16,6 +16,34 @@ import (
 	"goji.io/pat"
 )
 
+var defaultLoginForm = template.Must(template.New("index.html.tmpl").Parse(
+	`<!doctype html>
+<html>
+  <head>
+    <title>Login</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+  </head>
+  <body>
+    <div class="login-page">
+      <div class="form">
+	<form method="post" class="login-form">
+	  <section class="basic-info">
+	    <input type="email" name="login" placeholder="email address" tabindex="1" autofocus required>
+	    <input type="password" name="password" placeholder="password" tabindex="2" required>
+	    <input type="hidden" name="redirect" value="{{ .Redirect }}">
+	    <input type="submit" tabindex="4" value="Login">
+	  </section>
+	  <p class="message">
+	    <input tabindex="3" class="regular-checkbox" type="checkbox" id="ephemeral" name="ephemeral">
+	    <label  for="ephemeral">This is a public computer</label>
+	  </p>
+	</form>
+      </div>
+    </div>
+  </body>
+</html>
+`))
+
 // Mux constructs a goji mux that performs authentication with the
 // service.
 func (srv *Service) Mux() *goji.Mux {
@@ -23,9 +51,9 @@ func (srv *Service) Mux() *goji.Mux {
 	mux.HandleFunc(pat.Get("/auth"), srv.checkSession)
 	mux.HandleFunc(pat.Post("/login/"), srv.login)
 	mux.HandleFunc(pat.Post("/logout"), srv.logout)
+	setupIndexTemplate(mux, srv.StaticsDir)
 
 	if srv.StaticsDir != "" {
-		setupIndexTemplate(mux, srv.StaticsDir)
 		statics := http.FileServer(http.Dir(srv.StaticsDir))
 		mux.Handle(pat.Get("/login/*"), http.StripPrefix("/login/", statics))
 	}
@@ -34,11 +62,11 @@ func (srv *Service) Mux() *goji.Mux {
 
 func setupIndexTemplate(mux *goji.Mux, dir string) {
 	tf := filepath.Join(dir, "index.html.tmpl")
-	if _, err := os.Stat(tf); err != nil {
-		// no template found
-		return
+	tmpl := defaultLoginForm
+	if _, err := os.Stat(tf); dir != "" && err == nil {
+		tmpl = template.Must(template.ParseFiles(tf))
 	}
-	tmpl := template.Must(template.ParseFiles(tf))
+	tmpl.Option("missingkey=error")
 	index := func(w http.ResponseWriter, r *http.Request) {
 		originalURI := r.FormValue("redirect")
 		tmpl.Execute(w, struct {
@@ -47,6 +75,9 @@ func setupIndexTemplate(mux *goji.Mux, dir string) {
 	}
 	mux.HandleFunc(pat.Get("/login/"), index)
 	mux.HandleFunc(pat.Get("/login/index.html"), index)
+	mux.HandleFunc(pat.Get("/login/index.html.tmpl"), func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/login/index.html", http.StatusMovedPermanently)
+	})
 }
 
 func (srv *Service) hasCorrectBasicAuth(r *http.Request) bool {
