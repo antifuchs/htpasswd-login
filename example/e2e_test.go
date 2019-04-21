@@ -50,7 +50,6 @@ func TestE2E(t *testing.T) {
 	req, _ := http.NewRequest("GET", ts.URL+"/auth", nil)
 
 	// First request --- Try to authenticate:
-	req.Header.Set("X-Original-URI", redirURL)
 	resp, err := cl.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
