@@ -105,9 +105,9 @@ func (srv *Service) login(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Nope", http.StatusForbidden)
 			return
 		}
-		url, err := srv.redirectTarget(r)
-		if err != nil || url == "" {
-			log.Printf("No redirect target %q: %s", url, err)
+		url := srv.redirectTarget(r)
+		if url == "" {
+			log.Print("Authenticated, but no redirect target")
 			fmt.Fprint(w, "OK!")
 			return
 		}

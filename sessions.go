@@ -6,7 +6,6 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +18,6 @@ import (
 
 const usernameHeader string = "X-Authenticated-Username"
 const cookieName string = "_htpasswd_auth"
-const origTargetName string = "_htpasswd_uri"
 const sessionFormat string = time.RFC3339
 const realm string = "example.com"
 
@@ -149,37 +147,11 @@ func (s *Session) Valid(now Timesource, lifetime time.Duration, host string) err
 	return nil
 }
 
-func (srv *Service) redirectTarget(r *http.Request) (string, error) {
+func (srv *Service) redirectTarget(r *http.Request) string {
 	if formTarget := r.PostFormValue("redirect"); formTarget != "" {
-		return formTarget, nil
+		return formTarget
 	}
-	cookie, err := r.Cookie(origTargetName)
-	if err != nil {
-		if err == http.ErrNoCookie {
-			return "", nil
-		}
-		return "", err
-	}
-	u, err := url.Parse(cookie.Value)
-	if err != nil {
-		return "", err
-	}
-	if u.Host != "" && u.Host != r.Host {
-		return "", fmt.Errorf("Redirect cookie %q didn't match the host we expected: %q", u.Host, r.Host)
-	}
-	return cookie.Value, nil
-}
-
-func (srv *Service) redirectCookie(host, uri string) *http.Cookie {
-	return &http.Cookie{
-		Name:     origTargetName,
-		Value:    uri,
-		Domain:   host,
-		Path:     "/",
-		MaxAge:   0,
-		Secure:   srv.Secure,
-		HttpOnly: true,
-	}
+	return ""
 }
 
 func (srv *Service) invalidateCookie(host string) *http.Cookie {
