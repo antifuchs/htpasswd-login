@@ -3,20 +3,46 @@ package htpasswd
 import (
 	"encoding/base64"
 	"fmt"
+	"html/template"
 	"log"
 	"net/http"
 	"os"
-	"path"
 	"path/filepath"
 	"time"
 
 	auth "github.com/abbot/go-http-auth"
 
-	"net/url"
-
 	goji "goji.io"
 	"goji.io/pat"
 )
+
+var defaultLoginForm = template.Must(template.New("index.html.tmpl").Parse(
+	`<!doctype html>
+<html>
+  <head>
+    <title>Login</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+  </head>
+  <body>
+    <div class="login-page">
+      <div class="form">
+	<form method="post" class="login-form">
+	  <section class="basic-info">
+	    <input type="email" name="login" placeholder="email address" tabindex="1" autofocus required>
+	    <input type="password" name="password" placeholder="password" tabindex="2" required>
+	    <input type="hidden" name="redirect" value="{{ .Redirect }}">
+	    <input type="submit" tabindex="4" value="Login">
+	  </section>
+	  <p class="message">
+	    <input tabindex="3" class="regular-checkbox" type="checkbox" id="ephemeral" name="ephemeral">
+	    <label  for="ephemeral">This is a public computer</label>
+	  </p>
+	</form>
+      </div>
+    </div>
+  </body>
+</html>
+`))
 
 // Mux constructs a goji mux that performs authentication with the
 // service.
@@ -25,6 +51,7 @@ func (srv *Service) Mux() *goji.Mux {
 	mux.HandleFunc(pat.Get("/auth"), srv.checkSession)
 	mux.HandleFunc(pat.Post("/login/"), srv.login)
 	mux.HandleFunc(pat.Post("/logout"), srv.logout)
+	setupIndexTemplate(mux, srv.StaticsDir)
 
 	if srv.StaticsDir != "" {
 		statics := http.FileServer(http.Dir(srv.StaticsDir))
@@ -33,41 +60,24 @@ func (srv *Service) Mux() *goji.Mux {
 	return mux
 }
 
-func isParent(new, existing string) bool {
-	for ; existing != "/" && existing != ""; existing = path.Dir(existing) {
-		if new == existing || new+"/" == existing {
-			return true
-		}
+func setupIndexTemplate(mux *goji.Mux, dir string) {
+	tf := filepath.Join(dir, "index.html.tmpl")
+	tmpl := defaultLoginForm
+	if _, err := os.Stat(tf); dir != "" && err == nil {
+		tmpl = template.Must(template.ParseFiles(tf))
 	}
-	return existing == new
-}
-
-// Checks if a URL is more relevant (that is, has less qualifiers)
-// than another. It returns true if newStr is more specific than
-// existingStr. This is a heuristic based on my experience with the
-// way browsers make requests to sites behind htpasswd_auth; it will
-// likely break if you have framesets with references in the
-// right/wrong places, or other edge cases.
-func moreRelevant(newStr, existingStr string) bool {
-	new, err := url.Parse(newStr)
-	if err != nil {
-		return false
+	tmpl.Option("missingkey=error")
+	index := func(w http.ResponseWriter, r *http.Request) {
+		originalURI := r.FormValue("redirect")
+		tmpl.Execute(w, struct {
+			Redirect string
+		}{originalURI})
 	}
-	existing, err := url.Parse(existingStr)
-	if err != nil {
-		return true
-	}
-
-	// If the new URL is in a completely different location, it's
-	// more specific:
-	if existing.Host != new.Host || existing.Scheme != new.Scheme {
-		return true
-	}
-
-	// If the new URL's path is an ancestor of the existing one
-	// (or it's a completely different dir altogether), it's more
-	// specific:
-	return isParent(new.Path, existing.Path) || !isParent(existing.Path, new.Path)
+	mux.HandleFunc(pat.Get("/login/"), index)
+	mux.HandleFunc(pat.Get("/login/index.html"), index)
+	mux.HandleFunc(pat.Get("/login/index.html.tmpl"), func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/login/index.html", http.StatusMovedPermanently)
+	})
 }
 
 func (srv *Service) hasCorrectBasicAuth(r *http.Request) bool {
@@ -88,19 +98,6 @@ func (srv *Service) checkSession(w http.ResponseWriter, r *http.Request) {
 
 	newCookie := srv.invalidateCookie(r.Host)
 	success := false
-
-	if originalURI := r.Header.Get("X-Original-URI"); originalURI != "" {
-		redirCookie := srv.redirectCookie(r.Host, originalURI)
-		existing, err := r.Cookie(redirCookie.Name)
-		if err == http.ErrNoCookie || moreRelevant(originalURI, existing.Value) {
-			// Mark the place we came from (if the user
-			// visited a page more specific than any
-			// existing earmarked one, e.g. / after
-			// visiting /favicon.ico) in a cookie, so we
-			// know to redirect when logging in:
-			http.SetCookie(w, redirCookie)
-		}
-	}
 
 	// Cleanup and ensure we always send a decent response:
 	defer func() {
@@ -135,17 +132,18 @@ func (srv *Service) login(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		http.SetCookie(w, newCookie)
 		if !success {
+			log.Printf("Failed to authenticate.")
 			http.Error(w, "Nope", http.StatusForbidden)
 			return
 		}
-		url, err := srv.redirectTarget(r)
-		if err != nil || url == "" {
-			log.Printf("Couldn't redirect to %q: %s", url, err)
+		url := srv.redirectTarget(r)
+		if url == "" {
+			log.Print("Authenticated, but no redirect target")
 			fmt.Fprint(w, "OK!")
 			return
 		}
-		log.Printf("Redir target: %q", url)
-		http.Redirect(w, r, url, 302)
+		log.Printf("Authenticated, redirecting to %q", url)
+		http.Redirect(w, r, url, http.StatusSeeOther)
 	}()
 	user := r.PostFormValue("login")
 	if len(user) == 0 {

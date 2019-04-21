@@ -73,6 +73,42 @@ func TestGoodLogin(t *testing.T) {
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Should be authenticated, but I'm not")
 }
 
+func TestGoodLoginWithRedirect(t *testing.T) {
+	t.Parallel()
+	ti := &timer{at: time.Now()}
+	_, dir, ts := service(t, ti)
+	defer ts.Close()
+	defer os.RemoveAll(dir)
+
+	cj, err := cookiejar.New(nil)
+	require.NoError(t, err)
+	cl := http.Client{
+		Jar: cj,
+		CheckRedirect: func(r *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	params := url.Values{}
+	params.Set("login", "test@example.com")
+	params.Set("password", "test")
+	params.Set("redirect", "https://example.com/redirected-to")
+	resp, err := cl.PostForm(ts.URL+"/login/", params)
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusSeeOther, resp.StatusCode, "Login should have succeeded & redirected")
+	assert.Equal(t, "https://example.com/redirected-to", resp.Header.Get("Location"))
+	t.Log(resp.Cookies())
+	if assert.NotEmpty(t, resp.Cookies()) {
+		assert.NotEqual(t, "nope", resp.Cookies()[0].Value)
+	}
+
+	u, _ := url.Parse(ts.URL)
+	t.Log(cj.Cookies(u))
+
+	resp, err = cl.Get(ts.URL + "/auth")
+	assert.NoError(t, err)
+	assert.Equal(t, http.StatusOK, resp.StatusCode, "Should be authenticated, but I'm not")
+}
+
 func TestBadLogin(t *testing.T) {
 	t.Parallel()
 	ti := &timer{at: time.Unix(0, 0)}
@@ -226,7 +262,6 @@ func TestLoginRedirectValid(t *testing.T) {
 	require.NoError(t, err)
 
 	redirURL := "/wheee"
-	req.Header.Set("X-Original-URI", redirURL)
 	resp, err := cl.Do(req)
 	require.NoError(t, err)
 	defer resp.Body.Close()
@@ -234,50 +269,16 @@ func TestLoginRedirectValid(t *testing.T) {
 	params := url.Values{}
 	params.Set("login", "test@example.com")
 	params.Set("password", "test")
+	params.Set("redirect", redirURL)
 	resp, err = cl.PostForm(ts.URL+"/login/", params)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
-	assert.Equal(t, http.StatusFound, resp.StatusCode, "Should be redirected post successful authentication")
+	assert.Equal(t, http.StatusSeeOther, resp.StatusCode, "Should be redirected post successful authentication")
 
-	loc, _ := resp.Location()
+	loc, err := resp.Location()
+	assert.NoError(t, err)
 	assert.Equal(t, redirURL, loc.Path, "Didn't get redirected to the right place")
-}
-
-func TestLoginRedirectMultiple(t *testing.T) {
-	t.Parallel()
-	ti := &timer{at: time.Unix(0, 0)}
-	_, dir, ts := service(t, ti)
-	defer ts.Close()
-	defer os.RemoveAll(dir)
-	cj, _ := cookiejar.New(nil)
-	cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
-	req, err := http.NewRequest("GET", ts.URL+"/auth", nil)
-	require.NoError(t, err)
-	redirURL := "/wheee"
-	req.Header.Set("X-Original-URI", ts.URL+redirURL)
-	_, err = cl.Do(req)
-	require.NoError(t, err)
-
-	req, err = http.NewRequest("GET", ts.URL+"/auth", nil)
-	require.NoError(t, err)
-
-	req.Header.Set("X-Original-URI", ts.URL+"/wheee/favicon.ico")
-	_, err = cl.Do(req)
-	require.NoError(t, err)
-
-	params := url.Values{}
-	params.Set("login", "test@example.com")
-	params.Set("password", "test")
-	resp, err := cl.PostForm(ts.URL+"/login/", params)
-	require.NoError(t, err)
-
-	defer resp.Body.Close()
-	if assert.Equal(t, http.StatusFound, resp.StatusCode,
-		"Should be authenticated and redirected, but: %v", resp) {
-		loc, _ := resp.Location()
-		assert.Equal(t, redirURL, loc.Path, "Got redirected to the wrong place")
-	}
 }
 
 func TestLoginRedirectNoData(t *testing.T) {
