@@ -83,7 +83,7 @@ func (srv *Service) secretToken() []byte {
 		if err != nil {
 			log.Fatalf("Expected to read 32 bytes of randomness, but failed: %v", err)
 		}
-		log.Printf("WARNING: No CSRF secret set. To persist this one, use %q",
+		log.Printf("WARNING: No CSRF secret set. Forms will not persist past a restart. To persist this secret, start with -csrf %q",
 			base64.StdEncoding.EncodeToString(srv.csrf))
 		return srv.csrf
 	}
