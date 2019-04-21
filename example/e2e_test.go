@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -66,6 +67,7 @@ func TestE2E(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 	form, _ := ioutil.ReadAll(resp.Body)
+	csrfToken := resp.Header.Get("X-CSRF-Token")
 
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 	assert.Contains(t, string(form),
@@ -76,7 +78,10 @@ func TestE2E(t *testing.T) {
 	params.Set("login", "test@example.com")
 	params.Set("password", "test")
 	params.Set("redirect", redirURL)
-	resp, err = cl.PostForm(ts.URL+"/login/", params)
+	req, _ = http.NewRequest("POST", ts.URL+"/login/", strings.NewReader(params.Encode()))
+	req.Header.Set("X-CSRF-Token", csrfToken)
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	resp, err = cl.Do(req)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()

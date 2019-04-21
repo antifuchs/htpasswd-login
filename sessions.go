@@ -1,6 +1,7 @@
 package htpasswd
 
 import (
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"encoding/base64"
 	"encoding/json"
 
 	"github.com/dchest/uniuri"
@@ -44,9 +46,11 @@ type Service struct {
 	SessionDir     string
 	Htpasswd       string
 	StaticsDir     string
+	CSRFSecret     string
 	CookieLifetime time.Duration
 	Secure         bool
 	Now            Timesource
+	csrf           []byte
 }
 
 // Session is a (potentially authenticated) user's session.
@@ -65,6 +69,29 @@ type storedSession struct {
 	Created  string
 	Domain   string
 	Username string
+}
+
+func (srv *Service) secretToken() []byte {
+	var err error
+	if srv.csrf != nil {
+		return srv.csrf
+	}
+	if srv.CSRFSecret == "" {
+		// generate a secret:
+		srv.csrf = make([]byte, 32)
+		_, err := rand.Read(srv.csrf)
+		if err != nil {
+			log.Fatalf("Expected to read 32 bytes of randomness, but failed: %v", err)
+		}
+		log.Printf("WARNING: No CSRF secret set. Forms will not persist past a restart. To persist this secret, start with -csrf %q",
+			base64.StdEncoding.EncodeToString(srv.csrf))
+		return srv.csrf
+	}
+	srv.csrf, err = base64.StdEncoding.DecodeString(srv.CSRFSecret)
+	if err != nil {
+		log.Fatalf("Could not decode CSRF secret %q: %v", srv.CSRFSecret, err)
+	}
+	return srv.csrf
 }
 
 // Loads a session structure from disk and returns a plausible-looking

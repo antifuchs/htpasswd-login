@@ -1,9 +1,11 @@
 package htpasswd
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -12,6 +14,7 @@ import (
 
 	auth "github.com/abbot/go-http-auth"
 
+	"github.com/gorilla/csrf"
 	goji "goji.io"
 	"goji.io/pat"
 )
@@ -32,6 +35,7 @@ var defaultLoginForm = template.Must(template.New("index.html.tmpl").Parse(
 	    <input type="password" name="password" placeholder="password" tabindex="2" required>
 	    <input type="hidden" name="redirect" value="{{ .Redirect }}">
 	    <input type="submit" tabindex="4" value="Login">
+	    {{ .CSRFField }}
 	  </section>
 	  <p class="message">
 	    <input tabindex="3" class="regular-checkbox" type="checkbox" id="ephemeral" name="ephemeral">
@@ -44,10 +48,42 @@ var defaultLoginForm = template.Must(template.New("index.html.tmpl").Parse(
 </html>
 `))
 
+var defaultLogoutForm = template.Must(template.New("logout.html.tmpl").Parse(
+	`<!doctype html>
+<html>
+  <head>
+    <title>Login</title>
+    <link rel="stylesheet" type="text/css" href="style.css">
+  </head>
+  <body>
+    <div class="login-page">
+      <div class="form">
+	<form method="post" class="login-form">
+	  <section class="basic-info">
+	    <input type="submit" tabindex="4" value="Logout">
+	    {{ .CSRFField }}
+	  </section>
+	</form>
+      </div>
+    </div>
+  </body>
+</html>
+`))
+
+func csrfError(w http.ResponseWriter, r *http.Request) {
+	log.Printf("CSRF validation failure - %v; headers %v", csrf.FailureReason(r), r.Header)
+	http.Error(w, fmt.Sprintf("Forbidden - %v", csrf.FailureReason(r)),
+		http.StatusForbidden)
+}
+
 // Mux constructs a goji mux that performs authentication with the
 // service.
 func (srv *Service) Mux() *goji.Mux {
 	mux := goji.NewMux()
+
+	mux.Use(csrf.Protect(srv.secretToken(),
+		csrf.Secure(srv.Secure),
+		csrf.ErrorHandler(http.HandlerFunc(csrfError))))
 	mux.HandleFunc(pat.Get("/auth"), srv.checkSession)
 	mux.HandleFunc(pat.Post("/login/"), srv.login)
 	mux.HandleFunc(pat.Post("/logout"), srv.logout)
@@ -61,22 +97,53 @@ func (srv *Service) Mux() *goji.Mux {
 }
 
 func setupIndexTemplate(mux *goji.Mux, dir string) {
-	tf := filepath.Join(dir, "index.html.tmpl")
-	tmpl := defaultLoginForm
-	if _, err := os.Stat(tf); dir != "" && err == nil {
-		tmpl = template.Must(template.ParseFiles(tf))
+	logintf := filepath.Join(dir, "index.html.tmpl")
+	loginTmpl := defaultLoginForm
+	if _, err := os.Stat(logintf); dir != "" && err == nil {
+		loginTmpl = template.Must(template.ParseFiles(logintf))
 	}
-	tmpl.Option("missingkey=error")
-	index := func(w http.ResponseWriter, r *http.Request) {
+	loginTmpl.Option("missingkey=error")
+	logouttf := filepath.Join(dir, "logout.html.tmpl")
+	logoutTmpl := defaultLogoutForm
+	if _, err := os.Stat(logouttf); dir != "" && err == nil {
+		logoutTmpl = template.Must(template.ParseFiles(logouttf))
+	}
+	logoutTmpl.Option("missingkey=error")
+
+	login := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-CSRF-Token", csrf.Token(r))
 		originalURI := r.FormValue("redirect")
-		tmpl.Execute(w, struct {
-			Redirect string
-		}{originalURI})
+		var b bytes.Buffer
+		err := loginTmpl.Execute(&b, struct {
+			Redirect  string
+			CSRFField template.HTML
+		}{originalURI, csrf.TemplateField(r)})
+		if err != nil {
+			log.Printf("Failed so render login form: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		io.Copy(w, &b)
 	}
-	mux.HandleFunc(pat.Get("/login/"), index)
-	mux.HandleFunc(pat.Get("/login/index.html"), index)
+	logout := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-CSRF-Token", csrf.Token(r))
+		var b bytes.Buffer
+		err := logoutTmpl.Execute(&b, struct {
+			CSRFField template.HTML
+		}{csrf.TemplateField(r)})
+		if err != nil {
+			log.Printf("Failed so render logout form: %v", err)
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		io.Copy(w, &b)
+	}
+	mux.HandleFunc(pat.Get("/login/"), login)
+	mux.HandleFunc(pat.Get("/login/index.html"), login)
+	mux.HandleFunc(pat.Get("/logout"), logout)
 	mux.HandleFunc(pat.Get("/login/index.html.tmpl"), func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login/index.html", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc(pat.Get("/login/logout.html.tmpl"), func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/logout", http.StatusMovedPermanently)
 	})
 }
 
@@ -147,11 +214,13 @@ func (srv *Service) login(w http.ResponseWriter, r *http.Request) {
 	}()
 	user := r.PostFormValue("login")
 	if len(user) == 0 {
+		log.Print("user is empty")
 		return
 	}
 
 	password := r.PostFormValue("password")
 	if len(password) == 0 {
+		log.Print("password is empty")
 		return
 	}
 

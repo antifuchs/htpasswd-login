@@ -44,6 +44,43 @@ func service(t *testing.T, ti *timer) (*htpasswd.Service, string, *httptest.Serv
 	return srv, dir, ts
 }
 
+func getCSRFToken(t *testing.T, ts *httptest.Server, cl *http.Client, path string) string {
+	t.Helper()
+
+	resp, err := cl.Get(ts.URL + path)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
+	return resp.Header.Get("X-CSRF-Token")
+}
+
+func loginRequest(t *testing.T, ts *httptest.Server, cl *http.Client, user, password, redirect string) *http.Request {
+	t.Helper()
+
+	params := url.Values{}
+	params.Set("login", user)
+	params.Set("password", password)
+	if redirect != "" {
+		params.Set("redirect", redirect)
+	}
+
+	enc := params.Encode()
+	req, err := http.NewRequest("POST", ts.URL+"/login/", strings.NewReader(enc))
+	require.NoError(t, err)
+	req.Header.Set("X-CSRF-Token", getCSRFToken(t, ts, cl, "/login/"))
+	req.Header.Set("content-type", "application/x-www-form-urlencoded")
+	return req
+}
+
+func sessionCookie(cookies []*http.Cookie) string {
+	for _, cookie := range cookies {
+		if cookie.Name == "_htpasswd_auth" {
+			return cookie.Value
+		}
+	}
+	return ""
+}
+
 func TestGoodLogin(t *testing.T) {
 	t.Parallel()
 	ti := &timer{at: time.Now()}
@@ -53,11 +90,9 @@ func TestGoodLogin(t *testing.T) {
 
 	cj, err := cookiejar.New(nil)
 	require.NoError(t, err)
-	cl := http.Client{Jar: cj}
-	params := url.Values{}
-	params.Set("login", "test@example.com")
-	params.Set("password", "test")
-	resp, err := cl.PostForm(ts.URL+"/login/", params)
+	cl := &http.Client{Jar: cj}
+	req := loginRequest(t, ts, cl, "test@example.com", "test", "")
+	resp, err := cl.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Login should have succeeded")
 	t.Log(resp.Cookies())
@@ -82,17 +117,14 @@ func TestGoodLoginWithRedirect(t *testing.T) {
 
 	cj, err := cookiejar.New(nil)
 	require.NoError(t, err)
-	cl := http.Client{
+	cl := &http.Client{
 		Jar: cj,
 		CheckRedirect: func(r *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
 	}
-	params := url.Values{}
-	params.Set("login", "test@example.com")
-	params.Set("password", "test")
-	params.Set("redirect", "https://example.com/redirected-to")
-	resp, err := cl.PostForm(ts.URL+"/login/", params)
+	req := loginRequest(t, ts, cl, "test@example.com", "test", "https://example.com/redirected-to")
+	resp, err := cl.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusSeeOther, resp.StatusCode, "Login should have succeeded & redirected")
 	assert.Equal(t, "https://example.com/redirected-to", resp.Header.Get("Location"))
@@ -120,12 +152,10 @@ func TestBadLogin(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cl := http.Client{Jar: cj}
+	cl := &http.Client{Jar: cj}
 
-	params := url.Values{}
-	params.Set("login", "test@example.com")
-	params.Set("password", "wrongpassword")
-	resp, err := cl.PostForm(ts.URL+"/login/", params)
+	req := loginRequest(t, ts, cl, "test@example.com", "wrongpassword", "https://example.com")
+	resp, err := cl.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusForbidden, resp.StatusCode, "Login should have failed")
 }
@@ -141,15 +171,16 @@ func TestExpiredSession(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cl := http.Client{Jar: cj}
-	params := url.Values{}
-	params.Set("login", "test@example.com")
-	params.Set("password", "test")
-	resp, err := cl.PostForm(ts.URL+"/login/", params)
+	cl := &http.Client{Jar: cj}
+
+	// Log us in:
+	req := loginRequest(t, ts, cl, "test@example.com", "test", "https://example.com")
+	resp, err := cl.Do(req)
 	require.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode,
 		"Should be authenticated, am not: %v", resp)
 
+	// Try using the session in a while:
 	ti.at = ti.at.Add(time.Duration(5) * time.Second).Add(srv.CookieLifetime)
 	resp, err = cl.Get(ts.URL + "/auth")
 	assert.NoError(t, err)
@@ -168,20 +199,18 @@ func TestBadDomain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cl := http.Client{Jar: cj}
-	params := url.Values{}
-	params.Set("login", "test@example.com")
-	params.Set("password", "test")
-
+	cl := &http.Client{Jar: cj}
+	req := loginRequest(t, ts, cl, "test@example.com", "test", "https://example.com")
 	// Replace "127.0.0.1" from the test server with "localhost" -
 	// it's the same host (usually), but a different name.
 	// NOTE: This assumes that local DNS resolution for
 	// "localhost" works correctly; if yours doesn't, this test
 	// will fail:
-	otherURL := strings.Replace(ts.URL, "127.0.0.1", "localhost", 1)
-	resp, err := cl.PostForm(otherURL+"/login/", params)
+	req.URL.Host = strings.Replace(req.URL.Host, "127.0.0.1", "localhost", 1)
+	resp, err := cl.Do(req)
 	require.NoError(t, err)
-	assert.Equal(t, http.StatusOK, resp.StatusCode,
+	// The CSRF protection will prevent this from working, as the cookie is no longer valid.
+	assert.Equal(t, http.StatusForbidden, resp.StatusCode,
 		"Should be authenticated, am not: %v", resp)
 
 	resp, err = cl.Get(ts.URL + "/auth")
@@ -200,16 +229,17 @@ func TestLogout(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cl := http.Client{Jar: cj}
-	params := url.Values{}
-	params.Set("login", "test@example.com")
-	params.Set("password", "test")
-	_, err = cl.PostForm(ts.URL+"/login/", params)
-	assert.NoError(t, err)
+	cl := &http.Client{Jar: cj}
 
-	resp, err := cl.PostForm(ts.URL+"/logout", url.Values{})
+	req := loginRequest(t, ts, cl, "test@example.com", "test", "https://example.com")
+	resp, err := cl.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+
+	req, err = http.NewRequest("POST", ts.URL+"/logout", nil)
+	require.NoError(t, err)
+	req.Header.Set("X-CSRF-Token", getCSRFToken(t, ts, cl, "/logout"))
+	resp, err = cl.Do(req)
+	require.NoError(t, err)
 
 	resp, err = cl.Get(ts.URL + "/auth")
 	assert.NoError(t, err)
@@ -225,15 +255,15 @@ func TestMalice(t *testing.T) {
 	cj, err := cookiejar.New(nil)
 	require.NoError(t, err)
 
-	cl := http.Client{Jar: cj}
-	params := url.Values{}
-	params.Set("login", "test@example.com")
-	params.Set("password", "test")
-	resp, err := cl.PostForm(ts.URL+"/login/", params)
+	cl := &http.Client{Jar: cj}
+	req := loginRequest(t, ts, cl, "test@example.com", "test", "https://example.com")
+	resp, err := cl.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode)
 
-	session := resp.Cookies()[0].Value
+	session := sessionCookie(cj.Cookies(req.URL))
+	require.NotEmpty(t, session)
+
 	u, _ := url.Parse(ts.URL)
 	_, err = srv.ValidatedSessionFromStorage(dir+"/"+session, u.Host)
 	assert.Error(t, err)
@@ -257,7 +287,10 @@ func TestLoginRedirectValid(t *testing.T) {
 	defer ts.Close()
 	defer os.RemoveAll(dir)
 	cj, _ := cookiejar.New(nil)
-	cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
+	cl := &http.Client{
+		Jar:           cj,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
+	}
 	req, err := http.NewRequest("GET", ts.URL+"/auth", nil)
 	require.NoError(t, err)
 
@@ -266,11 +299,8 @@ func TestLoginRedirectValid(t *testing.T) {
 	require.NoError(t, err)
 	defer resp.Body.Close()
 
-	params := url.Values{}
-	params.Set("login", "test@example.com")
-	params.Set("password", "test")
-	params.Set("redirect", redirURL)
-	resp, err = cl.PostForm(ts.URL+"/login/", params)
+	req = loginRequest(t, ts, cl, "test@example.com", "test", redirURL)
+	resp, err = cl.Do(req)
 	require.NoError(t, err)
 
 	defer resp.Body.Close()
@@ -289,61 +319,17 @@ func TestLoginRedirectNoData(t *testing.T) {
 	defer os.RemoveAll(dir)
 
 	cj, _ := cookiejar.New(nil)
-	cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
-	params := url.Values{}
-	params.Set("login", "test@example.com")
-	params.Set("password", "test")
-	req, err := http.NewRequest("POST", ts.URL+"/login/", strings.NewReader(params.Encode()))
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	require.NoError(t, err)
-
+	cl := &http.Client{
+		Jar:           cj,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse },
+	}
+	req := loginRequest(t, ts, cl, "test@example.com", "test", "")
 	resp, err := cl.Do(req)
 	assert.NoError(t, err)
 
 	defer resp.Body.Close()
 	assert.Equal(t, http.StatusOK, resp.StatusCode,
 		"Should be authenticated and not redirected, but: %v", resp)
-}
-
-func TestLoginRedirectInvalid(t *testing.T) {
-	t.Parallel()
-	ti := &timer{at: time.Unix(0, 0)}
-	srv, dir, ts := service(t, ti)
-	defer ts.Close()
-	defer os.RemoveAll(dir)
-
-	cj, _ := cookiejar.New(nil)
-	cl := http.Client{Jar: cj, CheckRedirect: func(req *http.Request, via []*http.Request) error { return http.ErrUseLastResponse }}
-	params := url.Values{}
-	params.Set("login", "test@example.com")
-	params.Set("password", "test")
-	req, err := http.NewRequest("POST", ts.URL+"/login/", strings.NewReader(params.Encode()))
-	require.NoError(t, err)
-
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	redirURL := strings.Replace(ts.URL+"/wheee/", "127.0.0.1", "localhost", 1)
-	ck := &http.Cookie{
-		Name:     "_htpasswd_uri",
-		Value:    redirURL,
-		Domain:   "127.0.0.1",
-		Path:     "/",
-		MaxAge:   0,
-		Secure:   srv.Secure,
-		HttpOnly: true,
-	}
-	req.AddCookie(ck)
-
-	resp, err := cl.Do(req)
-	if assert.NoError(t, err) {
-		defer resp.Body.Close()
-
-		assert.Equal(t, http.StatusOK, resp.StatusCode,
-			"Should be authenticated, but: %v", resp)
-
-		loc, err := resp.Location()
-		assert.Error(t, err)
-		assert.Nil(t, loc, "Should not have gotten redirected")
-	}
 }
 
 func TestGoodHTTPBasicAuth(t *testing.T) {
@@ -363,7 +349,7 @@ func TestGoodHTTPBasicAuth(t *testing.T) {
 	resp, err := cl.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, resp.StatusCode, "Should be authenticated!")
-	assert.Empty(t, resp.Cookies(), "Should not have received cookies back")
+	assert.Empty(t, sessionCookie(resp.Cookies()), "Should not have received cookies back")
 }
 
 func TestBadHTTPBasicAuth(t *testing.T) {
@@ -383,7 +369,8 @@ func TestBadHTTPBasicAuth(t *testing.T) {
 	resp, err := cl.Do(req)
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusUnauthorized, resp.StatusCode, "Should not be authenticated!")
-	if assert.NotEmpty(t, resp.Cookies()) {
-		assert.Equal(t, "nope", resp.Cookies()[0].Value)
+	session := sessionCookie(resp.Cookies())
+	if assert.NotEmpty(t, session) {
+		assert.Equal(t, "nope", session)
 	}
 }

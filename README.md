@@ -26,9 +26,32 @@ Once installed, you can try out this service on the commandline like this (assum
 
 See [example/README.md](example/README.md) for details.
 
-In deployment (if you're running on HTTPS,
-which [you should](https://letsencrypt.org)), *please* run this with
+Once the login form looks like you think it should, deploy this to be
+visible to the big, bad internet. The following sections are (in order
+of importance) what you will definitely need to do:
+
+### Use HTTPS
+
+In deployment (if you're running on HTTPS, which [you
+should](https://letsencrypt.org)), *please* run this with
 `--secure=true` so that no cookies leak over insecure channels.
+
+### Configure a CSRF secret
+
+`htpasswd-login` uses [CSRF
+protection](https://blog.codinghorror.com/preventing-csrf-and-xsrf-attacks/)
+to hopefully prevent some easy avenues for phishing from authenticated
+sites. You should generate a CSRF secret and re-use this (otherwise
+login forms served to clients will no longer be submittable if you
+restart the server).
+
+To generate a secret once, use
+`dd if=/dev/urandom bs=32 count=1 | openssl base64 > csrf-secret.b64`
+
+Then, to use that secret, pass the `--csrf="$(cat csrf-secret.b64)"`
+flag to htpasswd-login.
+
+### Set up a cron job to clean out old sessions
 
 Once this is working for you, make sure to run the tool with the same
 arguments as you run the frontend with, and add `-cleanup` in a cron
