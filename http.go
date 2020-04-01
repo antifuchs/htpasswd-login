@@ -1,5 +1,6 @@
 //go:generate statik -src=example/page -include=*.css,*.map,*.html -p=statics
 //go:generate statik -src=example/page -include=*.tmpl -ns=templates -p=templates
+//go:generate go run ./scripts/validate_ci/main.go
 
 package htpasswd
 
