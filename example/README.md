@@ -16,14 +16,17 @@ http://127.0.0.1:8000/logout/
 
 ## Inspiration and design
 
-The form and styling are inspired by excellent login form
-template](http://codepen.io/colorlib/pen/rxddKy)
-and
-[this page on how to create styled checkboxes](http://www.inserthtml.com/2012/06/custom-form-radio-checkbox/). All
-the the good design is theirs, all ugliness was added by me (and I'm
-very sorry).
+This form uses the fantastic [water.css (light
+theme)](https://kognise.github.io/water.css/) classless stylesheet.
 
-I have tried to make this as accessible as possible - tab indexes
+I have tried to make this form as accessible as possible - tab indexes
 should make sense, autofocusing happens, and the entire form ought to
 be screen-readable (although I haven't tested this). Please send me
 patches if this isn't working for you!
+
+### Development / updating the stylesheet
+
+To update the vendored `water.css` file, follow the [install
+instructions](https://github.com/kognise/water.css#compiling-your-own-theme)
+and copy the `light.min.css` and `light.min.css.map` files to the `page/`
+subdirectory here.

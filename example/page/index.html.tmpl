@@ -2,25 +2,23 @@
 <html>
   <head>
     <title>Login</title>
-    <link rel="stylesheet" type="text/css" href="style.css">
+    <link rel="stylesheet" type="text/css" href="light.min.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
   </head>
   <body>
-    <div class="login-page">
-      <div class="form">
-        <form method="post" class="login-form">
-          <section class="basic-info">
-            <input type="email" name="login" placeholder="email address" tabindex="1" autofocus required>
-            <input type="password" name="password" placeholder="password" tabindex="2" required>
-            <input type="hidden" name="redirect" value="{{ .Redirect }}">
-            {{ .CSRFField }}
-            <input type="submit" tabindex="4" value="Login">
-          </section>
-          <p class="message">
-            <input tabindex="3" class="regular-checkbox" type="checkbox" id="ephemeral" name="ephemeral">
-            <label  for="ephemeral">This is a public computer</label>
-          </p>
-        </form>
-      </div>
-    </div>
+    <form method="post">
+      <fieldset>
+        <legend>Log in</legend>
+        <input type="email" name="login" placeholder="email address" tabindex="1" autofocus required>
+        <input type="password" name="password" placeholder="password" tabindex="2" required>
+        <input type="hidden" name="redirect" value="{{ .Redirect }}">
+        {{ .CSRFField }}
+        <input type="submit" tabindex="4" value="Login">
+      </fieldset>
+      <fieldset>
+        <input tabindex="3" type="checkbox" id="ephemeral" name="ephemeral">
+        <label for="ephemeral">This is a public computer</label>
+      </fieldset>
+    </form>
   </body>
 </html>
