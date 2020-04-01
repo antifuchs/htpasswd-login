@@ -135,6 +135,7 @@ func setupIndexTemplate(mux *goji.Mux, dir string) {
 	mux.Handle(pat.Get("/login/index.html.tmpl"), redirector("./"))
 	mux.Handle(pat.Get("/logout/index.html.tmpl"), redirector("./"))
 	mux.Handle(pat.Get("/login/index.html"), redirector("./"))
+	mux.Handle(pat.Get("/login/logout.html"), redirector("../logout/"))
 	mux.Handle(pat.Get("/logout/index.html"), redirector("./"))
 }
 

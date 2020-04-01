@@ -11,7 +11,7 @@ http://127.0.0.1:8000/login/.
 The test login is `test@example.com` and the password is `test`.
 
 To test the logout flow, navigate to
-http://127.0.0.1:8000/login/logout.html
+http://127.0.0.1:8000/logout/
 
 
 ## Inspiration and design
