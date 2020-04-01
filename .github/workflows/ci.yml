@@ -1,0 +1,32 @@
+name: CI
+# This workflow is triggered on pushes to the repository.
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GOPATH: ${{ github.workspace }}
+      GO111MODULE: off
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        path: ./src/github.com/${{ github.repository }}
+    - name: Install Go
+      uses: actions/setup-go@v1
+      with:
+        go-version: 1.14.x
+    - name: "Setup PATH for go binaries"
+      run: echo "::add-path::${GOPATH}/bin"
+    - name: "Install prereqs"
+      run: go get -u github.com/rakyll/statik
+    - name: Debug stuff
+      run: echo GOPATH="$GOPATH" PATH="$PATH" HOME="$HOME"
+    - name: Generate files
+      run: go generate -v -x github.com/antifuchs/htpasswd-login/...
+    - name: go fmt
+      run: go fmt github.com/antifuchs/htpasswd-login/...
+    - name: check for any changes
+      run: cd ./src/github.com/antifuchs/htpasswd-login && go run ./scripts/validate_ci/main.go
+    - name: Test
+      run: go test github.com/antifuchs/htpasswd-login/...

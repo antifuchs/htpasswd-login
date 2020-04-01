@@ -7,9 +7,6 @@ import (
 )
 
 func main() {
-	if os.Getenv("CI") == "" {
-		return // nothing to do outside CI
-	}
 	cmd := exec.Command("git", "diff", "--exit-code")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -17,4 +14,5 @@ func main() {
 	if err != nil {
 		log.Fatalf("generation seems to have done something: %v", err)
 	}
+	log.Printf("No changes detected, we're ok!")
 }
