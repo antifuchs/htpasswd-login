@@ -1,5 +1,7 @@
-//go:generate statik -src=example/page -include=*.css,*.map,*.html -p=statics
-//go:generate statik -src=example/page -include=*.tmpl -ns=templates -p=templates
+//go:generate statik -m -src=example/page -include=*.css,*.map,*.html -p=statics
+//go:generate statik -m -src=example/page -include=*.tmpl -ns=templates -p=templates
+//go:generate go fmt ./statics
+//go:generate go fmt ./templates
 
 package htpasswd
 
