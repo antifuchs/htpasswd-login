@@ -1,3 +1,8 @@
+//go:generate statik -m -src=example/page -include=*.css,*.map,*.html -p=statics
+//go:generate statik -m -src=example/page -include=*.tmpl -ns=templates -p=templates
+//go:generate go fmt ./statics
+//go:generate go fmt ./templates
+
 package htpasswd
 
 import (
@@ -9,66 +14,41 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"time"
 
+	_ "github.com/antifuchs/htpasswd-login/statics"
+	_ "github.com/antifuchs/htpasswd-login/templates"
+
 	auth "github.com/abbot/go-http-auth"
+	"github.com/rakyll/statik/fs"
 
 	"github.com/gorilla/csrf"
 	goji "goji.io"
 	"goji.io/pat"
 )
 
-var defaultLoginForm = template.Must(template.New("index.html.tmpl").Parse(
-	`<!doctype html>
-<html>
-  <head>
-    <title>Login</title>
-    <link rel="stylesheet" type="text/css" href="style.css">
-  </head>
-  <body>
-    <div class="login-page">
-      <div class="form">
-	<form method="post" class="login-form">
-	  <section class="basic-info">
-	    <input type="email" name="login" placeholder="email address" tabindex="1" autofocus required>
-	    <input type="password" name="password" placeholder="password" tabindex="2" required>
-	    <input type="hidden" name="redirect" value="{{ .Redirect }}">
-	    <input type="submit" tabindex="4" value="Login">
-	    {{ .CSRFField }}
-	  </section>
-	  <p class="message">
-	    <input tabindex="3" class="regular-checkbox" type="checkbox" id="ephemeral" name="ephemeral">
-	    <label  for="ephemeral">This is a public computer</label>
-	  </p>
-	</form>
-      </div>
-    </div>
-  </body>
-</html>
-`))
+var templateFS = mustTemplateFS()
 
-var defaultLogoutForm = template.Must(template.New("logout.html.tmpl").Parse(
-	`<!doctype html>
-<html>
-  <head>
-    <title>Login</title>
-    <link rel="stylesheet" type="text/css" href="style.css">
-  </head>
-  <body>
-    <div class="login-page">
-      <div class="form">
-	<form method="post" class="login-form">
-	  <section class="basic-info">
-	    <input type="submit" tabindex="4" value="Logout">
-	    {{ .CSRFField }}
-	  </section>
-	</form>
-      </div>
-    </div>
-  </body>
-</html>
-`))
+func mustTemplateFS() http.FileSystem {
+	statikFS, err := fs.NewWithNamespace("templates")
+	if err != nil {
+		log.Fatal(err)
+	}
+	return statikFS
+}
+
+func mustTemplateFromStatics(name string) *template.Template {
+	data, err := fs.ReadFile(templateFS, name)
+	if err != nil {
+		log.Fatalf("Could not read template %q: %v", name, err)
+	}
+	return template.Must(template.New(path.Base(name)).Parse(string(data)))
+}
+
+var defaultLoginForm = mustTemplateFromStatics("/index.html.tmpl")
+var defaultLogoutForm = mustTemplateFromStatics("/logout.html.tmpl")
 
 func csrfError(w http.ResponseWriter, r *http.Request) {
 	log.Printf("CSRF validation failure - %v; headers %v", csrf.FailureReason(r), r.Header)
@@ -85,14 +65,24 @@ func (srv *Service) Mux() *goji.Mux {
 		csrf.Secure(srv.Secure),
 		csrf.ErrorHandler(http.HandlerFunc(csrfError))))
 	mux.HandleFunc(pat.Get("/auth"), srv.checkSession)
+
 	mux.HandleFunc(pat.Post("/login/"), srv.login)
+	mux.HandleFunc(pat.Post("/login"), srv.login)
+
+	mux.HandleFunc(pat.Post("/logout/"), srv.logout)
 	mux.HandleFunc(pat.Post("/logout"), srv.logout)
 	setupIndexTemplate(mux, srv.StaticsDir)
 
-	if srv.StaticsDir != "" {
-		statics := http.FileServer(http.Dir(srv.StaticsDir))
-		mux.Handle(pat.Get("/login/*"), http.StripPrefix("/login/", statics))
+	statics, err := fs.New()
+	if err != nil {
+		log.Fatal(err)
 	}
+	fs := http.FileServer(statics)
+	if srv.StaticsDir != "" {
+		fs = http.FileServer(http.Dir(srv.StaticsDir))
+	}
+	mux.Handle(pat.Get("/login/*"), http.StripPrefix("/login/", fs))
+	mux.Handle(pat.Get("/logout/*"), http.StripPrefix("/logout/", fs))
 	return mux
 }
 
@@ -100,12 +90,14 @@ func setupIndexTemplate(mux *goji.Mux, dir string) {
 	logintf := filepath.Join(dir, "index.html.tmpl")
 	loginTmpl := defaultLoginForm
 	if _, err := os.Stat(logintf); dir != "" && err == nil {
+		log.Printf("Using login form template %q", logintf)
 		loginTmpl = template.Must(template.ParseFiles(logintf))
 	}
 	loginTmpl.Option("missingkey=error")
 	logouttf := filepath.Join(dir, "logout.html.tmpl")
 	logoutTmpl := defaultLogoutForm
 	if _, err := os.Stat(logouttf); dir != "" && err == nil {
+		log.Printf("Using logout form template %q", logouttf)
 		logoutTmpl = template.Must(template.ParseFiles(logouttf))
 	}
 	logoutTmpl.Option("missingkey=error")
@@ -137,13 +129,21 @@ func setupIndexTemplate(mux *goji.Mux, dir string) {
 		io.Copy(w, &b)
 	}
 	mux.HandleFunc(pat.Get("/login/"), login)
-	mux.HandleFunc(pat.Get("/login/index.html"), login)
-	mux.HandleFunc(pat.Get("/logout"), logout)
-	mux.HandleFunc(pat.Get("/login/index.html.tmpl"), func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/login/index.html", http.StatusMovedPermanently)
-	})
-	mux.HandleFunc(pat.Get("/login/logout.html.tmpl"), func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/logout", http.StatusMovedPermanently)
+	mux.HandleFunc(pat.Get("/logout/"), logout)
+
+	// compatibility redirects:
+	mux.Handle(pat.Get("/login"), redirector("login/"))
+	mux.Handle(pat.Get("/logout"), redirector("logout/"))
+	mux.Handle(pat.Get("/login/index.html.tmpl"), redirector("./"))
+	mux.Handle(pat.Get("/logout/index.html.tmpl"), redirector("./"))
+	mux.Handle(pat.Get("/login/index.html"), redirector("./"))
+	mux.Handle(pat.Get("/login/logout.html"), redirector("../logout/"))
+	mux.Handle(pat.Get("/logout/index.html"), redirector("./"))
+}
+
+func redirector(to string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, to, http.StatusMovedPermanently)
 	})
 }
 

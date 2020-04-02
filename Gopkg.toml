@@ -39,3 +39,7 @@
 [[constraint]]
   name = "goji.io"
   version = "2.0.0"
+
+[[constraint]]
+  name = "github.com/rakyll/statik"
+  version = "0.1.7"

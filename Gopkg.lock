@@ -50,6 +50,12 @@
   version = "v1.0.0"
 
 [[projects]]
+  name = "github.com/rakyll/statik"
+  packages = ["fs"]
+  revision = "46bd79c4540341fe472fe71dd2ce0ccd4e635450"
+  version = "v0.1.7"
+
+[[projects]]
   name = "github.com/stretchr/testify"
   packages = ["assert","require"]
   revision = "69483b4bd14f5845b5a1e55bca19e954e827f1d0"
@@ -82,6 +88,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "a23b43c595850085a607e7fe3f09f592cff99e05a992dfae8565c126fe5b9d1f"
+  inputs-digest = "b9df90a2342d5b66a271a01c63834c954e34ec659e3b9c17f56ffd816c0ee52d"
   solver-name = "gps-cdcl"
   solver-version = 1
