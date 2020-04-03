@@ -24,6 +24,7 @@ github.com/pkg/errors
 github.com/pmezard/go-difflib/difflib
 # github.com/rakyll/statik v0.1.7
 ## explicit
+github.com/rakyll/statik
 github.com/rakyll/statik/fs
 # github.com/stretchr/testify v1.1.4
 ## explicit
