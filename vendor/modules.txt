@@ -8,13 +8,11 @@ github.com/davecgh/go-spew/spew
 ## explicit
 github.com/dchest/uniuri
 # github.com/gorilla/context v1.1.1
-## explicit
 github.com/gorilla/context
 # github.com/gorilla/csrf v1.5.1
 ## explicit
 github.com/gorilla/csrf
 # github.com/gorilla/securecookie v1.1.1
-## explicit
 github.com/gorilla/securecookie
 # github.com/pkg/errors v0.8.1
 ## explicit
