@@ -17,8 +17,11 @@ form.
 
 ## Installation / running this
 
+`htpasswd-login` requires a go modules to build, so a recent go
+checkout is recommended - in CI, this tool builds with go 1.14.x.
+
 You can `go get -u github.com/antifuchs/htpasswd-login` and you should
-end up with a `htpasswd-login` binary in your `$GOPATH/bin`.
+end up with a `htpasswd-login` binary in your `$GOBIN` directory.
 
 Once installed, you can try out this service on the commandline like this (assuming `/tmp/sessions` exists):
 
