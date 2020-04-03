@@ -2,7 +2,7 @@
 # https://app.bors.tech/repositories so bors can see the new repo!
 
 status = [
-  "CI",
+  "test",
 ]
 timeout_sec = 300
 delete_merged_branches = true
