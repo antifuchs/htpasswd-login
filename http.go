@@ -1,5 +1,5 @@
-//go:generate statik -m -src=example/page -include=*.css,*.map,*.html -p=statics
-//go:generate statik -m -src=example/page -include=*.tmpl -ns=templates -p=templates
+//go:generate go run github.com/rakyll/statik -m -src=example/page -include=*.css,*.map,*.html -p=statics
+//go:generate go run github.com/rakyll/statik -m -src=example/page -include=*.tmpl -ns=templates -p=templates
 //go:generate go fmt ./statics
 //go:generate go fmt ./templates
 
