@@ -10,6 +10,5 @@ require (
 	github.com/stretchr/testify v1.8.1
 	github.com/zenazn/goji v0.9.1-0.20170812220505-c05078ca8194
 	goji.io v2.0.2+incompatible
-	golang.org/x/crypto v0.0.0-20170930174604-9419663f5a44 // indirect
-	golang.org/x/net v0.0.0-20171004034648-a04bdaca5b32 // indirect
+	golang.org/x/net v0.7.0 // indirect
 )
