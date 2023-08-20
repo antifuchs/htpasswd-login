@@ -15,6 +15,12 @@ service you're running and have `htpasswd-login` run a RESTful service
 for authentication and even serve up a customizable authentication
 form.
 
+## Status: [![No Maintenance Intended](http://unmaintained.tech/badge.svg)](http://unmaintained.tech/)
+
+I'm no longer using this tool, and haven't done work on it in a while. Since this is a security-relevant project, I believe you should be properly informed about the status of this project, which is: unmaintained, archived.
+
+Feel free to fork this and maintain it if you do use it - I'm happy to unarchive the repo to point at your fork in the readme.
+
 ## Installation / running this
 
 `htpasswd-login` requires a go modules to build, so a recent go
